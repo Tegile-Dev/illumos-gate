@@ -27,9 +27,7 @@
  * Use is subject to license terms.
  */
 
-#if defined(ELFOBJ)
-#pragma weak asinl = __asinl
-#endif
+#pragma weak __asinl = asinl
 
 /*
  *	asinl(x) = atan2l(x,sqrt(1-x*x));
@@ -53,7 +51,9 @@ static const long double big = 1.0e+20L;
 long double
 asinl(long double x) {
 	long double t, w;
+#ifndef lint
 	volatile long double dummy;
+#endif
 
 	w = fabsl(x);
 	if (isnanl(x))

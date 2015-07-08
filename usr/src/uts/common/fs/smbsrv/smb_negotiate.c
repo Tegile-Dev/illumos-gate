@@ -20,7 +20,7 @@
  */
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2012 Nexenta Systems, Inc.  All rights reserved.
+ * Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
  */
 
 /*
@@ -186,14 +186,12 @@
  * ERRSRV/ERRerror
  */
 #include <sys/types.h>
-#include <sys/strsubr.h>
-#include <sys/socketvar.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <smbsrv/smb_kproto.h>
 #include <smbsrv/smbinfo.h>
 
-static smb_xlate_t smb_dialect[] = {
+static const smb_xlate_t smb_dialect[] = {
 	{ DIALECT_UNKNOWN,		"DIALECT_UNKNOWN" },
 	{ PC_NETWORK_PROGRAM_1_0,	"PC NETWORK PROGRAM 1.0" },
 	{ PCLAN1_0,			"PCLAN1.0" },
@@ -313,7 +311,9 @@ smb_com_negotiate(smb_request_t *sr)
 
 	/*
 	 * UNICODE support is required for long share names,
-	 * long file names and streams.
+	 * long file names and streams.  Note: CAP_RAW_MODE
+	 * is not supported because it does nothing to help
+	 * modern clients and causes nasty complications.
 	 */
 	negprot->ni_capabilities = CAP_LARGE_FILES
 	    | CAP_UNICODE
@@ -326,11 +326,6 @@ smb_com_negotiate(smb_request_t *sr)
 	    | CAP_LARGE_READX
 	    | CAP_LARGE_WRITEX
 	    | CAP_DFS;
-
-	if (smb_raw_mode) {
-		negprot->ni_capabilities |= CAP_RAW_MODE;
-		rawmode = 3;
-	}
 
 	if (smb_cap_passthru)
 		negprot->ni_capabilities |= CAP_INFOLEVEL_PASSTHRU;
@@ -486,7 +481,7 @@ smb_com_negotiate(smb_request_t *sr)
 static int
 smb_xlate_dialect(const char *dialect)
 {
-	smb_xlate_t	*dp;
+	const smb_xlate_t *dp;
 	int		i;
 
 	for (i = 0; i < sizeof (smb_dialect) / sizeof (smb_dialect[0]); ++i) {

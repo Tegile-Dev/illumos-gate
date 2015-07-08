@@ -27,9 +27,7 @@
  * Use is subject to license terms.
  */
 
-#if defined(ELFOBJ)
-#pragma weak asinhl = __asinhl
-#endif
+#pragma weak __asinhl = asinhl
 
 #include "libm.h"
 
@@ -42,7 +40,9 @@ static const long double
 long double
 asinhl(long double x) {
 	long double t, w;
+#ifndef lint
 	volatile long double dummy;
+#endif
 
 	w = fabsl(x);
 	if (isnanl(x))

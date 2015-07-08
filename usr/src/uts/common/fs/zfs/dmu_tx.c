@@ -21,7 +21,7 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2011 Nexenta Systems, Inc.  All rights reserved.
- * Copyright (c) 2012, 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2012, 2015 by Delphix. All rights reserved.
  */
 
 #include <sys/dmu.h>
@@ -685,7 +685,7 @@ dmu_tx_hold_free(dmu_tx_t *tx, uint64_t object, uint64_t off, uint64_t len)
 			uint64_t ibyte = i << shift;
 			err = dnode_next_offset(dn, 0, &ibyte, 2, 1, 0);
 			i = ibyte >> shift;
-			if (err == ESRCH)
+			if (err == ESRCH || i > end)
 				break;
 			if (err) {
 				tx->tx_err = err;
@@ -713,6 +713,7 @@ dmu_tx_hold_zap(dmu_tx_t *tx, uint64_t object, int add, const char *name)
 {
 	dmu_tx_hold_t *txh;
 	dnode_t *dn;
+	dsl_dataset_phys_t *ds_phys;
 	uint64_t nblocks;
 	int epbs, err;
 
@@ -787,8 +788,9 @@ dmu_tx_hold_zap(dmu_tx_t *tx, uint64_t object, int add, const char *name)
 	 * we'll have to modify an indirect twig for each.
 	 */
 	epbs = dn->dn_indblkshift - SPA_BLKPTRSHIFT;
+	ds_phys = dsl_dataset_phys(dn->dn_objset->os_dsl_dataset);
 	for (nblocks = dn->dn_maxblkid >> epbs; nblocks != 0; nblocks >>= epbs)
-		if (dn->dn_objset->os_dsl_dataset->ds_phys->ds_prev_snap_obj)
+		if (ds_phys->ds_prev_snap_obj)
 			txh->txh_space_towrite += 3 << dn->dn_indblkshift;
 		else
 			txh->txh_space_tooverwrite += 3 << dn->dn_indblkshift;

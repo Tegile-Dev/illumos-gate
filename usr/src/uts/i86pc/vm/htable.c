@@ -21,6 +21,8 @@
 
 /*
  * Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014 by Delphix. All rights reserved.
+ * Copyright 2015 Joyent, Inc.
  */
 
 #include <sys/types.h>
@@ -475,7 +477,8 @@ htable_steal_active(hat_t *hat, uint_t cnt, uint_t threshold,
 				pte = x86pte_get(ht, e);
 				if (!PTE_ISVALID(pte))
 					continue;
-				hat_pte_unmap(ht, e, HAT_UNLOAD, pte, NULL);
+				hat_pte_unmap(ht, e, HAT_UNLOAD, pte, NULL,
+				    B_TRUE);
 			}
 
 			/*
@@ -1712,8 +1715,6 @@ htable_walk(
 	}
 
 	while (va < eaddr && va >= *vaddr) {
-		ASSERT(!IN_VA_HOLE(va));
-
 		/*
 		 *  Find lowest table with any entry for given address.
 		 */
@@ -1722,6 +1723,7 @@ htable_walk(
 			if (ht != NULL) {
 				pte = htable_scan(ht, &va, eaddr);
 				if (PTE_ISPAGE(pte, l)) {
+					VERIFY(!IN_VA_HOLE(va));
 					*vaddr = va;
 					*htp = ht;
 					return (pte);
@@ -2209,14 +2211,17 @@ x86pte_cas(htable_t *ht, uint_t entry, x86pte_t old, x86pte_t new)
  * Invalidate a page table entry as long as it currently maps something that
  * matches the value determined by expect.
  *
- * Also invalidates any TLB entries and returns the previous value of the PTE.
+ * If tlb is set, also invalidates any TLB entries.
+ *
+ * Returns the previous value of the PTE.
  */
 x86pte_t
 x86pte_inval(
 	htable_t *ht,
 	uint_t entry,
 	x86pte_t expect,
-	x86pte_t *pte_ptr)
+	x86pte_t *pte_ptr,
+	boolean_t tlb)
 {
 	x86pte_t	*ptep;
 	x86pte_t	oldpte;
@@ -2265,7 +2270,7 @@ x86pte_inval(
 		found = CAS_PTE(ptep, oldpte, 0);
 		XPV_DISALLOW_PAGETABLE_UPDATES();
 	} while (found != oldpte);
-	if (oldpte & (PT_REF | PT_MOD))
+	if (tlb && (oldpte & (PT_REF | PT_MOD)))
 		hat_tlb_inval(ht->ht_hat, htable_e2va(ht, entry));
 
 done:

@@ -27,9 +27,7 @@
  * Use is subject to license terms.
  */
 
-#if defined(ELFOBJ)
-#pragma weak tanhl = __tanhl
-#endif
+#pragma weak __tanhl = tanhl
 
 /*
  * tanhl(x) returns the hyperbolic tangent of x
@@ -72,7 +70,9 @@ long double
 tanhl(long double x) {
 	long double t, y, z;
 	int signx;
+#ifndef lint
 	volatile long double dummy;
+#endif
 
 	if (isnanl(x))
 		return (x + x);		/* x is NaN */

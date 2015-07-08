@@ -18,12 +18,14 @@
  *
  * CDDL HEADER END
  */
+
+/*
+ * Copyright 2015 Nexenta Systems, Inc.  All rights reserved.
+ */
+
 /*
  * Copyright 2010 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
- */
-/*
- * Copyright 2012 Nexenta Systems, Inc. All rights reserved.
  */
 
 /*
@@ -4587,7 +4589,7 @@ recov_retry:
 	/*
 	 * treat symlink names as data
 	 */
-	linkdata = utf8_to_str(&lr_res->link, &len, NULL);
+	linkdata = utf8_to_str((utf8string *)&lr_res->link, &len, NULL);
 	if (linkdata != NULL) {
 		int uio_len = len - 1;
 		/* len includes null byte, which we won't uiomove */
@@ -9787,19 +9789,11 @@ retry:
 
 	mutex_exit(&rp->r_statelock);
 
-	if (len <= PAGESIZE) {
-		error = nfs4_getapage(vp, off, len, protp, pl, plsz,
-		    seg, addr, rw, cr);
-		NFS4_DEBUG(nfs4_pageio_debug && error,
-		    (CE_NOTE, "getpage error %d; off=%lld, "
-		    "len=%lld", error, off, (u_longlong_t)len));
-	} else {
-		error = pvn_getpages(nfs4_getapage, vp, off, len, protp,
-		    pl, plsz, seg, addr, rw, cr);
-		NFS4_DEBUG(nfs4_pageio_debug && error,
-		    (CE_NOTE, "getpages error %d; off=%lld, "
-		    "len=%lld", error, off, (u_longlong_t)len));
-	}
+	error = pvn_getpages(nfs4_getapage, vp, off, len, protp,
+	    pl, plsz, seg, addr, rw, cr);
+	NFS4_DEBUG(nfs4_pageio_debug && error,
+	    (CE_NOTE, "getpages error %d; off=%lld, len=%lld",
+	    error, off, (u_longlong_t)len));
 
 	switch (error) {
 	case NFS_EOF:
@@ -9813,7 +9807,7 @@ retry:
 }
 
 /*
- * Called from pvn_getpages or nfs4_getpage to get a particular page.
+ * Called from pvn_getpages to get a particular page.
  */
 /* ARGSUSED */
 static int

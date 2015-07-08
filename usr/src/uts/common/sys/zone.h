@@ -20,6 +20,7 @@
  */
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2013, Joyent, Inc. All rights reserved.
  * Copyright 2014 Nexenta Systems, Inc. All rights reserved.
  * Copyright 2014 Igor Kozhukhov <ikozhukhov@gmail.com>.
  */
@@ -102,6 +103,7 @@ extern "C" {
 #define	ZONE_ATTR_HOSTID	15
 #define	ZONE_ATTR_FS_ALLOWED	16
 #define	ZONE_ATTR_NETWORK	17
+#define	ZONE_ATTR_INITNORESTART	20
 
 /* Start of the brand-specific attribute namespace */
 #define	ZONE_ATTR_BRAND_ATTRS	32768
@@ -393,6 +395,10 @@ typedef struct {
 	kstat_named_t	zm_fss_shr_pct;
 	kstat_named_t	zm_fss_pri_hi;
 	kstat_named_t	zm_fss_pri_avg;
+	kstat_named_t	zm_ffcap;
+	kstat_named_t	zm_ffnoproc;
+	kstat_named_t	zm_ffnomem;
+	kstat_named_t	zm_ffmisc;
 } zone_misc_kstat_t;
 
 typedef struct zone {
@@ -574,6 +580,11 @@ typedef struct zone {
 	uint64_t	zone_stime;		/* total system time */
 	uint64_t	zone_utime;		/* total user time */
 	uint64_t	zone_wtime;		/* total time waiting in runq */
+	/* fork-fail kstat tracking */
+	uint32_t	zone_ffcap;		/* hit an rctl cap */
+	uint32_t	zone_ffnoproc;		/* get proc/lwp error */
+	uint32_t	zone_ffnomem;		/* as_dup/memory error */
+	uint32_t	zone_ffmisc;		/* misc. other error */
 
 	struct loadavg_s zone_loadavg;		/* loadavg for this zone */
 	uint64_t	zone_hp_avenrun[3];	/* high-precision avenrun */
@@ -589,6 +600,14 @@ typedef struct zone {
 	 * DTrace-private per-zone state
 	 */
 	int		zone_dtrace_getf;	/* # of unprivileged getf()s */
+
+	/*
+	 * Synchronization primitives used to synchronize between mounts and
+	 * zone creation/destruction.
+	 */
+	int		zone_mounts_in_progress;
+	kcondvar_t	zone_mount_cv;
+	kmutex_t	zone_mount_lock;
 } zone_t;
 
 /*
@@ -808,8 +827,8 @@ extern int zone_dataset_visible(const char *, int *);
 extern int zone_kadmin(int, int, const char *, cred_t *);
 extern void zone_shutdown_global(void);
 
-extern void mount_in_progress(void);
-extern void mount_completed(void);
+extern void mount_in_progress(zone_t *);
+extern void mount_completed(zone_t *);
 
 extern int zone_walk(int (*)(zone_t *, void *), void *);
 

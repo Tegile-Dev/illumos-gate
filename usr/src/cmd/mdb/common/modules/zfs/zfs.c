@@ -21,7 +21,7 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2011 Nexenta Systems, Inc. All rights reserved.
- * Copyright (c) 2012, 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2011, 2014 by Delphix. All rights reserved.
  */
 
 /* Portions Copyright 2010 Robert Milkowski */
@@ -449,6 +449,7 @@ blkptr(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 typedef struct mdb_dmu_buf_impl {
 	struct {
 		uint64_t db_object;
+		uintptr_t db_data;
 	} db;
 	uintptr_t db_objset;
 	uint64_t db_level;
@@ -591,6 +592,7 @@ zap_leaf(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 	char buf[16*1024];
 	int verbose = B_FALSE;
 	int four = B_FALSE;
+	dmu_buf_t l_dbuf;
 	zap_leaf_t l;
 	zap_leaf_phys_t *zlp = (void *)buf;
 	int i;
@@ -601,7 +603,8 @@ zap_leaf(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 	    NULL) != argc)
 		return (DCMD_USAGE);
 
-	l.l_phys = zlp;
+	l_dbuf.db_data = zlp;
+	l.l_dbuf = &l_dbuf;
 	l.l_bs = 14; /* assume 16k blocks */
 	if (four)
 		l.l_bs = 12;
@@ -958,6 +961,16 @@ arc_print(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 	static const char *bytestats[] = {
 		"p", "c", "c_min", "c_max", "size", "duplicate_buffers_size",
 		"arc_meta_used", "arc_meta_limit", "arc_meta_max",
+		"arc_meta_min", "hdr_size", "data_size", "metadata_size",
+		"other_size", "anon_size", "anon_evictable_data",
+		"anon_evictable_metadata", "mru_size", "mru_evictable_data",
+		"mru_evictable_metadata", "mru_ghost_size",
+		"mru_ghost_evictable_data", "mru_ghost_evictable_metadata",
+		"mfu_size", "mfu_evictable_data", "mfu_evictable_metadata",
+		"mfu_ghost_size", "mfu_ghost_evictable_data",
+		"mfu_ghost_evictable_metadata", "evict_l2_cached",
+		"evict_l2_eligible", "evict_l2_ineligible", "l2_read_bytes",
+		"l2_write_bytes", "l2_size", "l2_asize", "l2_hdr_size",
 		NULL
 	};
 
@@ -1679,8 +1692,12 @@ typedef struct mdb_spa {
 	uintptr_t spa_root_vdev;
 } mdb_spa_t;
 
+typedef struct mdb_dsl_pool {
+	uintptr_t dp_root_dir;
+} mdb_dsl_pool_t;
+
 typedef struct mdb_dsl_dir {
-	uintptr_t dd_phys;
+	uintptr_t dd_dbuf;
 	int64_t dd_space_towrite[TXG_SIZE];
 } mdb_dsl_dir_t;
 
@@ -1760,11 +1777,10 @@ static int
 spa_space(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 {
 	mdb_spa_t spa;
-	uintptr_t dp_root_dir;
+	mdb_dsl_pool_t dp;
 	mdb_dsl_dir_t dd;
+	mdb_dmu_buf_impl_t db;
 	mdb_dsl_dir_phys_t dsp;
-	uint64_t children;
-	uintptr_t childaddr;
 	space_data_t sd;
 	int shift = 20;
 	char *suffix = "M";
@@ -1781,21 +1797,16 @@ spa_space(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 		suffix = "";
 	}
 
-	if (GETMEMB(addr, "spa", spa_dsl_pool, spa.spa_dsl_pool) ||
-	    GETMEMB(addr, "spa", spa_root_vdev, spa.spa_root_vdev) ||
-	    GETMEMB(spa.spa_root_vdev, "vdev", vdev_children, children) ||
-	    GETMEMB(spa.spa_root_vdev, "vdev", vdev_child, childaddr) ||
-	    GETMEMB(spa.spa_dsl_pool, "dsl_pool",
-	    dp_root_dir, dp_root_dir) ||
-	    GETMEMB(dp_root_dir, "dsl_dir", dd_phys, dd.dd_phys) ||
-	    GETMEMB(dp_root_dir, "dsl_dir",
-	    dd_space_towrite, dd.dd_space_towrite) ||
-	    GETMEMB(dd.dd_phys, "dsl_dir_phys",
-	    dd_used_bytes, dsp.dd_used_bytes) ||
-	    GETMEMB(dd.dd_phys, "dsl_dir_phys",
-	    dd_compressed_bytes, dsp.dd_compressed_bytes) ||
-	    GETMEMB(dd.dd_phys, "dsl_dir_phys",
-	    dd_uncompressed_bytes, dsp.dd_uncompressed_bytes)) {
+	if (mdb_ctf_vread(&spa, ZFS_STRUCT "spa", "mdb_spa_t",
+	    addr, 0) == -1 ||
+	    mdb_ctf_vread(&dp, ZFS_STRUCT "dsl_pool", "mdb_dsl_pool_t",
+	    spa.spa_dsl_pool, 0) == -1 ||
+	    mdb_ctf_vread(&dd, ZFS_STRUCT "dsl_dir", "mdb_dsl_dir_t",
+	    dp.dp_root_dir, 0) == -1 ||
+	    mdb_ctf_vread(&db, ZFS_STRUCT "dmu_buf_impl", "mdb_dmu_buf_impl_t",
+	    dd.dd_dbuf, 0) == -1 ||
+	    mdb_ctf_vread(&dsp, ZFS_STRUCT "dsl_dir_phys",
+	    "mdb_dsl_dir_phys_t", db.db.db_data, 0) == -1) {
 		return (DCMD_ERR);
 	}
 
@@ -2601,7 +2612,7 @@ refcount(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 		off = mdb_ctf_offsetof_by_name("refcount_t", "rc_removed");
 		if (off == -1)
 			return (DCMD_ERR);
-		mdb_pwalk("list", reference_cb, (void*)B_FALSE, addr + off);
+		mdb_pwalk("list", reference_cb, (void*)B_TRUE, addr + off);
 	}
 
 	return (DCMD_OK);
