@@ -21,7 +21,8 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2012 Milan Jurik. All rights reserved.
- * Copyright 2015 Nexenta Systems, Inc. All rights reserved.
+ * Copyright 2016 Toomas Soome <tsoome@me.com>
+ * Copyright 2016 Nexenta Systems, Inc. All rights reserved.
  */
 
 #include <stdio.h>
@@ -58,6 +59,7 @@
 #include "./../common/bblk_einfo.h"
 #include "./../common/boot_utils.h"
 #include "./../common/mboot_extra.h"
+#include "getresponse.h"
 
 #ifndef	TEXT_DOMAIN
 #define	TEXT_DOMAIN	"SUNW_OST_OSCMD"
@@ -131,6 +133,11 @@ main(int argc, char *argv[])
 
 	(void) setlocale(LC_ALL, "");
 	(void) textdomain(TEXT_DOMAIN);
+	if (init_yes() < 0) {
+		(void) fprintf(stderr, gettext(ERR_MSG_INIT_YES),
+		    strerror(errno));
+		exit(BC_ERROR);
+	}
 
 	/*
 	 * retro-compatibility: installing the bootblock is the default
@@ -664,7 +671,7 @@ init_device(ig_device_t *device, char *path)
 		return (BC_ERROR);
 	}
 
-	if (efi_alloc_and_read(device->disk_fd, &vtoc) > 0) {
+	if (efi_alloc_and_read(device->disk_fd, &vtoc) >= 0) {
 		device->type = IG_DEV_EFI;
 		efi_free(vtoc);
 	}
@@ -731,7 +738,7 @@ get_start_sector(ig_device_t *device)
 	if (is_efi(device->type)) {
 		struct dk_gpt *vtoc;
 
-		if (efi_alloc_and_read(device->disk_fd, &vtoc) <= 0)
+		if (efi_alloc_and_read(device->disk_fd, &vtoc) < 0)
 			return (BC_ERROR);
 
 		device->start_sector = vtoc->efi_parts[device->slice].p_start;
@@ -849,7 +856,7 @@ found_part:
 	/* get confirmation for -m */
 	if (write_mbr && !force_mbr) {
 		(void) fprintf(stdout, MBOOT_PROMPT);
-		if (getchar() != 'y') {
+		if (!yes()) {
 			write_mbr = 0;
 			(void) fprintf(stdout, MBOOT_NOT_UPDATED);
 			return (BC_ERROR);
@@ -1419,7 +1426,14 @@ prepare_stage2(ig_data_t *install, char *updt_str)
 			i += 2;
 		}
 	} else {
-		/* Solaris VTOC */
+		/* Solaris VTOC & EFI */
+		if (device->start_sector >
+		    UINT32_MAX - STAGE2_BLKOFF(device->type)) {
+			fprintf(stderr, gettext("Error: partition start sector "
+			    "must be less than %lld\n"),
+			    (uint64_t)UINT32_MAX - STAGE2_BLKOFF(device->type));
+			return (BC_ERROR);
+		}
 		stage2->first_sector = device->start_sector +
 		    STAGE2_BLKOFF(device->type);
 		BOOT_DEBUG("stage2 first sector: %d\n", stage2->first_sector);

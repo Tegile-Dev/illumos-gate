@@ -22,6 +22,7 @@ MANFILES= 	libMPAPI.3lib		\
 	 	libSMHBAAPI.3lib	\
 	 	libadm.3lib		\
 	 	libaio.3lib		\
+		libavl.3lib		\
 	 	libbsdmalloc.3lib	\
 	 	libbsm.3lib		\
 	 	libc.3lib		\
@@ -75,6 +76,7 @@ MANFILES= 	libMPAPI.3lib		\
 	 	libpicltree.3lib	\
 	 	libpkcs11.3lib		\
 	 	libpool.3lib		\
+		libproc.3lib		\
 	 	libproject.3lib		\
 	 	libpthread.3lib		\
 	 	libresolv.3lib		\

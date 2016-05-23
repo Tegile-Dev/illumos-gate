@@ -22,8 +22,8 @@
 /*
  * Copyright (c) 1990, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2012, Josef 'Jeff' Sipek <jeffpc@31bits.net>. All rights reserved.
- * Copyright 2013 Nexenta Systems, Inc. All rights reserved.
  * Copyright 2014 Garrett D'Amore <garrett@damore.org>
+ * Copyright 2016 Nexenta Systems, Inc.
  */
 
 /*	Copyright (c) 1983, 1984, 1985, 1986, 1987, 1988, 1989  AT&T.	*/
@@ -529,20 +529,22 @@ getsect(struct man_node *manp, char **pv)
 		manp->secv = NULL;
 		get_all_sect(manp);
 	} else if (sargs) {
+		DPRINTF("-- Adding %s: sections=%s\n", manp->path, mansec);
 		manp->secv = split(mansec, ',');
 		for (sectp = manp->secv; *sectp; sectp++)
 			lower(*sectp);
 	} else if ((sections = strchr(*pv, ',')) != NULL) {
-		DPRINTF("-- Adding %s: MANSECTS=%s\n", manp->path, sections);
-		manp->secv = split(++sections, ',');
+		sections++;
+		DPRINTF("-- Adding %s: sections=%s\n", manp->path, sections);
+		manp->secv = split(sections, ',');
 		for (sectp = manp->secv; *sectp; sectp++)
 			lower(*sectp);
 		if (*manp->secv == NULL)
 			get_all_sect(manp);
 	} else if ((sections = check_config(*pv)) != NULL) {
 		manp->defsrch = 1;
-		DPRINTF("-- Adding %s: from %s, MANSECTS=%s\n", manp->path,
-		    CONFIG, sections);
+		DPRINTF("-- Adding %s: sections=%s (from %s)\n", manp->path,
+		    sections, CONFIG);
 		manp->secv = split(sections, ',');
 		for (sectp = manp->secv; *sectp; sectp++)
 			lower(*sectp);
@@ -550,7 +552,7 @@ getsect(struct man_node *manp, char **pv)
 			get_all_sect(manp);
 	} else {
 		manp->defsrch = 1;
-		DPRINTF("-- Adding %s: default sort order\n", manp->path);
+		DPRINTF("-- Adding %s: default search order\n", manp->path);
 		manp->secv = NULL;
 		get_all_sect(manp);
 	}
@@ -1193,7 +1195,6 @@ format(char *path, char *dir, char *name, char *pg)
 	char		manpname[MAXPATHLEN], catpname[MAXPATHLEN];
 	char		cmdbuf[BUFSIZ], tmpbuf[BUFSIZ];
 	char		*cattool;
-	int		utf8 = 0;
 	struct stat	sbman, sbcat;
 
 	found++;
@@ -1227,22 +1228,16 @@ format(char *path, char *dir, char *name, char *pg)
 	else
 		cattool = "cat";
 
-	/* Preprocess UTF-8 input with preconv (could be smarter) */
-	if (strstr(path, "UTF-8") != NULL)
-		utf8 = 1;
-
 	if (psoutput) {
 		(void) snprintf(cmdbuf, BUFSIZ,
-		    "cd %s; %s %s%s | mandoc -Tps | lp -Tpostscript",
-		    path, cattool, manpname,
-		    utf8 ? " | " PRECONV " -e UTF-8" : "");
+		    "cd %s; %s %s | mandoc -Tps | lp -Tpostscript",
+		    path, cattool, manpname);
 		DPRINTF("-- Using manpage: %s\n", manpname);
 		goto cmd;
 	} else if (lintout) {
 		(void) snprintf(cmdbuf, BUFSIZ,
-		    "cd %s; %s %s%s | mandoc -Tlint",
-		    path, cattool, manpname,
-		    utf8 ? " | " PRECONV " -e UTF-8" : "");
+		    "cd %s; %s %s | mandoc -Tlint",
+		    path, cattool, manpname);
 		DPRINTF("-- Linting manpage: %s\n", manpname);
 		goto cmd;
 	}
@@ -1262,10 +1257,8 @@ format(char *path, char *dir, char *name, char *pg)
 	DPRINTF("-- Using manpage: %s\n", manpname);
 	if (manwidth > 0)
 		(void) snprintf(tmpbuf, BUFSIZ, "-Owidth=%d ", manwidth);
-	(void) snprintf(cmdbuf, BUFSIZ, "cd %s; %s %s%s | mandoc -T%s %s| %s",
-	    path, cattool, manpname,
-	    utf8 ? " | " PRECONV " -e UTF-8 " : "",
-	    utf8 ? "utf8" : "ascii", (manwidth > 0) ? tmpbuf : "", pager);
+	(void) snprintf(cmdbuf, BUFSIZ, "cd %s; %s %s | mandoc %s| %s",
+	    path, cattool, manpname, (manwidth > 0) ? tmpbuf : "", pager);
 
 cmd:
 	DPRINTF("-- Command: %s\n", cmdbuf);
@@ -1298,9 +1291,10 @@ check_config(char *path)
 {
 	FILE		*fp;
 	char		*rc = NULL;
-	char		*sect;
+	char		*sect = NULL;
 	char		fname[MAXPATHLEN];
 	char		*line = NULL;
+	char		*nl;
 	size_t		linecap = 0;
 
 	(void) snprintf(fname, MAXPATHLEN, "%s/%s", path, CONFIG);
@@ -1309,18 +1303,20 @@ check_config(char *path)
 		return (NULL);
 
 	while (getline(&line, &linecap, fp) > 0) {
-		if ((rc = strstr(line, "MANSECTS")) != NULL)
+		if ((rc = strstr(line, "MANSECTS=")) != NULL)
 			break;
 	}
 
 	(void) fclose(fp);
 
-	if (rc == NULL || (sect = strchr(line, '=')) == NULL)
-		return (NULL);
-	else
-		return (++sect);
-}
+	if (rc != NULL) {
+		if ((nl = strchr(rc, '\n')) != NULL)
+			*nl = '\0';
+		sect = strchr(rc, '=') + 1;
+	}
 
+	return (sect);
+}
 
 /*
  * Initialize the bintoman array with appropriate device and inode info.
@@ -1528,7 +1524,8 @@ path_to_manpath(char *bindir)
  * Free a linked list of dupnode structs.
  */
 void
-free_dupnode(struct dupnode *dnp) {
+free_dupnode(struct dupnode *dnp)
+{
 	struct dupnode *dnp2;
 	struct secnode *snp;
 

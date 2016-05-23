@@ -21,6 +21,7 @@
  */
 /*
  * Copyright 2014 Garrett D'Amore <garrett@damore.org>
+ * Copyright 2014 PALO, Richard.
  *
  * Copyright 2005 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
@@ -49,6 +50,7 @@
 #define	_ISO_STDIO_ISO_H
 
 #include <sys/feature_tests.h>
+#include <sys/null.h>
 #include <sys/va_list.h>
 #include <stdio_tag.h>
 #include <stdio_impl.h>
@@ -109,14 +111,6 @@ typedef	__longlong_t	fpos_t;
 #if __cplusplus >= 199711L
 }
 #endif /* end of namespace std */
-
-#ifndef	NULL
-#if defined(_LP64)
-#define	NULL	0L
-#else
-#define	NULL	0
-#endif
-#endif
 
 #define	BUFSIZ	1024
 
@@ -238,7 +232,14 @@ extern int	putc(int, FILE *);
 extern int	getchar(void);
 extern int	putchar(int);
 #endif
+
+/*
+ * ISO/IEC C11 removed gets from the standard library. Therefore if a strict C11
+ * environment has been requested, we remove it.
+ */
+#if !defined(_STDC_C11) || defined(__EXTENSIONS__)
 extern char	*gets(char *);
+#endif
 extern int	puts(const char *);
 extern int	ungetc(int, FILE *);
 extern size_t	fread(void *_RESTRICT_KYWD, size_t, size_t,

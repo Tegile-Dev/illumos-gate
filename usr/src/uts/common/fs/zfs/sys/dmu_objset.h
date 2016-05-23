@@ -23,6 +23,7 @@
  * Copyright (c) 2012, 2014 by Delphix. All rights reserved.
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
+ * Copyright (c) 2014 Integros [integros.com]
  */
 
 /* Portions Copyright 2010 Robert Milkowski */
@@ -93,7 +94,6 @@ struct objset {
 	uint8_t os_copies;
 	enum zio_checksum os_dedup_checksum;
 	boolean_t os_dedup_verify;
-	boolean_t os_evicting;
 	zfs_logbias_op_t os_logbias;
 	zfs_cache_type_t os_primary_cache;
 	zfs_cache_type_t os_secondary_cache;

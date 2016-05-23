@@ -20,6 +20,7 @@ file path=usr/share/man/man3c/__fbufsize.3c
 file path=usr/share/man/man3c/_longjmp.3c
 file path=usr/share/man/man3c/_stack_grow.3c
 file path=usr/share/man/man3c/a64l.3c
+file path=usr/share/man/man3c/aligned_alloc.3c
 file path=usr/share/man/man3c/abort.3c
 file path=usr/share/man/man3c/abs.3c
 file path=usr/share/man/man3c/addsev.3c
@@ -53,6 +54,7 @@ file path=usr/share/man/man3c/bsd_signal.3c
 file path=usr/share/man/man3c/bsearch.3c
 file path=usr/share/man/man3c/bstring.3c
 file path=usr/share/man/man3c/btowc.3c
+file path=usr/share/man/man3c/call_once.3c
 file path=usr/share/man/man3c/catgets.3c
 file path=usr/share/man/man3c/catopen.3c
 file path=usr/share/man/man3c/cfgetispeed.3c
@@ -63,6 +65,7 @@ file path=usr/share/man/man3c/clock_nanosleep.3c
 file path=usr/share/man/man3c/clock_settime.3c
 file path=usr/share/man/man3c/closedir.3c
 file path=usr/share/man/man3c/closefrom.3c
+file path=usr/share/man/man3c/cnd.3c
 file path=usr/share/man/man3c/cond_init.3c
 file path=usr/share/man/man3c/confstr.3c
 file path=usr/share/man/man3c/crypt.3c
@@ -105,8 +108,13 @@ file path=usr/share/man/man3c/ecvt.3c
 file path=usr/share/man/man3c/enable_extended_FILE_stdio.3c
 file path=usr/share/man/man3c/encrypt.3c
 file path=usr/share/man/man3c/end.3c
+file path=usr/share/man/man3c/endian.3c
+file path=usr/share/man/man3c/epoll_create.3c
+file path=usr/share/man/man3c/epoll_ctl.3c
+file path=usr/share/man/man3c/epoll_wait.3c
 file path=usr/share/man/man3c/err.3c
 file path=usr/share/man/man3c/euclen.3c
+file path=usr/share/man/man3c/eventfd.3c
 file path=usr/share/man/man3c/exit.3c
 file path=usr/share/man/man3c/fattach.3c
 file path=usr/share/man/man3c/fclose.3c
@@ -122,6 +130,7 @@ file path=usr/share/man/man3c/fgetc.3c
 file path=usr/share/man/man3c/fgetpos.3c
 file path=usr/share/man/man3c/fgetwc.3c
 file path=usr/share/man/man3c/floating_to_decimal.3c
+file path=usr/share/man/man3c/flock.3c
 file path=usr/share/man/man3c/flockfile.3c
 file path=usr/share/man/man3c/fmtmsg.3c
 file path=usr/share/man/man3c/fnmatch.3c
@@ -239,6 +248,7 @@ file path=usr/share/man/man3c/mq_send.3c
 file path=usr/share/man/man3c/mq_setattr.3c
 file path=usr/share/man/man3c/mq_unlink.3c
 file path=usr/share/man/man3c/msync.3c
+file path=usr/share/man/man3c/mtx.3c
 file path=usr/share/man/man3c/mutex_init.3c
 file path=usr/share/man/man3c/nanosleep.3c
 file path=usr/share/man/man3c/ndbm.3c
@@ -281,6 +291,7 @@ file path=usr/share/man/man3c/priv_str_to_set.3c
 file path=usr/share/man/man3c/pset_getloadavg.3c
 file path=usr/share/man/man3c/psignal.3c
 file path=usr/share/man/man3c/pthread_atfork.3c
+file path=usr/share/man/man3c/pthread_attr_get_np.3c
 file path=usr/share/man/man3c/pthread_attr_getdetachstate.3c
 file path=usr/share/man/man3c/pthread_attr_getguardsize.3c
 file path=usr/share/man/man3c/pthread_attr_getinheritsched.3c
@@ -352,6 +363,7 @@ file path=usr/share/man/man3c/puts.3c
 file path=usr/share/man/man3c/putspent.3c
 file path=usr/share/man/man3c/putws.3c
 file path=usr/share/man/man3c/qsort.3c
+file path=usr/share/man/man3c/quick_exit.3c
 file path=usr/share/man/man3c/raise.3c
 file path=usr/share/man/man3c/rand.3c
 file path=usr/share/man/man3c/random.3c
@@ -402,6 +414,7 @@ file path=usr/share/man/man3c/shm_unlink.3c
 file path=usr/share/man/man3c/sigfpe.3c
 file path=usr/share/man/man3c/siginterrupt.3c
 file path=usr/share/man/man3c/signal.3c
+file path=usr/share/man/man3c/signalfd.3c
 file path=usr/share/man/man3c/sigqueue.3c
 file path=usr/share/man/man3c/sigsetops.3c
 file path=usr/share/man/man3c/sigstack.3c
@@ -460,10 +473,19 @@ file path=usr/share/man/man3c/thr_sigsetmask.3c
 file path=usr/share/man/man3c/thr_stksegment.3c
 file path=usr/share/man/man3c/thr_suspend.3c
 file path=usr/share/man/man3c/thr_yield.3c
+file path=usr/share/man/man3c/thrd_create.3c
+file path=usr/share/man/man3c/thrd_current.3c
+file path=usr/share/man/man3c/thrd_detach.3c
+file path=usr/share/man/man3c/thrd_equal.3c
+file path=usr/share/man/man3c/thrd_exit.3c
+file path=usr/share/man/man3c/thrd_join.3c
+file path=usr/share/man/man3c/thrd_yield.3c
 file path=usr/share/man/man3c/timer_create.3c
 file path=usr/share/man/man3c/timer_delete.3c
 file path=usr/share/man/man3c/timer_settime.3c
 file path=usr/share/man/man3c/timeradd.3c
+file path=usr/share/man/man3c/timerfd_create.3c
+file path=usr/share/man/man3c/timespec_get.3c
 file path=usr/share/man/man3c/tmpfile.3c
 file path=usr/share/man/man3c/tmpnam.3c
 file path=usr/share/man/man3c/toascii.3c
@@ -473,6 +495,7 @@ file path=usr/share/man/man3c/towlower.3c
 file path=usr/share/man/man3c/towupper.3c
 file path=usr/share/man/man3c/truncate.3c
 file path=usr/share/man/man3c/tsearch.3c
+file path=usr/share/man/man3c/tss.3c
 file path=usr/share/man/man3c/ttyname.3c
 file path=usr/share/man/man3c/ttyslot.3c
 file path=usr/share/man/man3c/u8_strcmp.3c
@@ -554,6 +577,7 @@ link path=usr/share/man/man3c/ascftime.3c target=strftime.3c
 link path=usr/share/man/man3c/asctime.3c target=ctime.3c
 link path=usr/share/man/man3c/asctime_r.3c target=ctime.3c
 link path=usr/share/man/man3c/asprintf.3c target=printf.3c
+link path=usr/share/man/man3c/at_quick_exit.3c target=quick_exit.3c
 link path=usr/share/man/man3c/atof.3c target=strtod.3c
 link path=usr/share/man/man3c/atoi.3c target=strtol.3c
 link path=usr/share/man/man3c/atol.3c target=strtol.3c
@@ -669,6 +693,12 @@ link path=usr/share/man/man3c/backtrace_symbols.3c target=walkcontext.3c
 link path=usr/share/man/man3c/backtrace_symbols_fd.3c target=walkcontext.3c
 link path=usr/share/man/man3c/bcmp.3c target=bstring.3c
 link path=usr/share/man/man3c/bcopy.3c target=bstring.3c
+link path=usr/share/man/man3c/be16toh.3c target=endian.3c
+link path=usr/share/man/man3c/be32toh.3c target=endian.3c
+link path=usr/share/man/man3c/be64toh.3c target=endian.3c
+link path=usr/share/man/man3c/betoh16.3c target=endian.3c
+link path=usr/share/man/man3c/betoh32.3c target=endian.3c
+link path=usr/share/man/man3c/betoh64.3c target=endian.3c
 link path=usr/share/man/man3c/bind_textdomain_codeset.3c target=gettext.3c
 link path=usr/share/man/man3c/bindtextdomain.3c target=gettext.3c
 link path=usr/share/man/man3c/btowc_l.3c target=btowc.3c
@@ -683,6 +713,12 @@ link path=usr/share/man/man3c/clearerr.3c target=ferror.3c
 link path=usr/share/man/man3c/clock_getres.3c target=clock_settime.3c
 link path=usr/share/man/man3c/clock_gettime.3c target=clock_settime.3c
 link path=usr/share/man/man3c/closelog.3c target=syslog.3c
+link path=usr/share/man/man3c/cnd_broadcast.3c target=cnd.3c
+link path=usr/share/man/man3c/cnd_destroy.3c target=cnd.3c
+link path=usr/share/man/man3c/cnd_init.3c target=cnd.3c
+link path=usr/share/man/man3c/cnd_signal.3c target=cnd.3c
+link path=usr/share/man/man3c/cnd_timedwait.3c target=cnd.3c
+link path=usr/share/man/man3c/cnd_wait.3c target=cnd.3c
 link path=usr/share/man/man3c/cond_broadcast.3c target=cond_init.3c
 link path=usr/share/man/man3c/cond_destroy.3c target=cond_init.3c
 link path=usr/share/man/man3c/cond_reltimedwait.3c target=cond_init.3c
@@ -731,6 +767,8 @@ link path=usr/share/man/man3c/endspent.3c target=getspnam.3c
 link path=usr/share/man/man3c/endusershell.3c target=getusershell.3c
 link path=usr/share/man/man3c/endutent.3c target=getutent.3c
 link path=usr/share/man/man3c/endutxent.3c target=getutxent.3c
+link path=usr/share/man/man3c/epoll_create1.3c target=epoll_create.3c
+link path=usr/share/man/man3c/epoll_pwait.3c target=epoll_wait.3c
 link path=usr/share/man/man3c/erand48.3c target=drand48.3c
 link path=usr/share/man/man3c/errno.3c target=perror.3c
 link path=usr/share/man/man3c/errx.3c target=err.3c
@@ -830,6 +868,12 @@ link path=usr/share/man/man3c/gsignal.3c target=ssignal.3c
 link path=usr/share/man/man3c/hasmntopt.3c target=getmntent.3c
 link path=usr/share/man/man3c/hcreate.3c target=hsearch.3c
 link path=usr/share/man/man3c/hdestroy.3c target=hsearch.3c
+link path=usr/share/man/man3c/htobe16.3c target=endian.3c
+link path=usr/share/man/man3c/htobe32.3c target=endian.3c
+link path=usr/share/man/man3c/htobe64.3c target=endian.3c
+link path=usr/share/man/man3c/htole16.3c target=endian.3c
+link path=usr/share/man/man3c/htole32.3c target=endian.3c
+link path=usr/share/man/man3c/htole64.3c target=endian.3c
 link path=usr/share/man/man3c/initstate.3c target=random.3c
 link path=usr/share/man/man3c/innetgr.3c target=getnetgrent.3c
 link path=usr/share/man/man3c/isalnum.3c target=ctype.3c
@@ -903,6 +947,12 @@ link path=usr/share/man/man3c/l64a.3c target=a64l.3c
 link path=usr/share/man/man3c/labs.3c target=abs.3c
 link path=usr/share/man/man3c/lcong48.3c target=drand48.3c
 link path=usr/share/man/man3c/ldiv.3c target=div.3c
+link path=usr/share/man/man3c/le16toh.3c target=endian.3c
+link path=usr/share/man/man3c/le32toh.3c target=endian.3c
+link path=usr/share/man/man3c/le64toh.3c target=endian.3c
+link path=usr/share/man/man3c/letoh16.3c target=endian.3c
+link path=usr/share/man/man3c/letoh32.3c target=endian.3c
+link path=usr/share/man/man3c/letoh64.3c target=endian.3c
 link path=usr/share/man/man3c/lfind.3c target=lsearch.3c
 link path=usr/share/man/man3c/llabs.3c target=abs.3c
 link path=usr/share/man/man3c/lldiv.3c target=div.3c
@@ -945,6 +995,12 @@ link path=usr/share/man/man3c/mq_reltimedsend_np.3c target=mq_send.3c
 link path=usr/share/man/man3c/mq_timedreceive.3c target=mq_receive.3c
 link path=usr/share/man/man3c/mq_timedsend.3c target=mq_send.3c
 link path=usr/share/man/man3c/mrand48.3c target=drand48.3c
+link path=usr/share/man/man3c/mtx_destroy.3c target=mtx.3c
+link path=usr/share/man/man3c/mtx_init.3c target=mtx.3c
+link path=usr/share/man/man3c/mtx_lock.3c target=mtx.3c
+link path=usr/share/man/man3c/mtx_timedlock.3c target=mtx.3c
+link path=usr/share/man/man3c/mtx_trylock.3c target=mtx.3c
+link path=usr/share/man/man3c/mtx_unlock.3c target=mtx.3c
 link path=usr/share/man/man3c/munlock.3c target=mlock.3c
 link path=usr/share/man/man3c/munlockall.3c target=mlockall.3c
 link path=usr/share/man/man3c/mutex_consistent.3c target=mutex_init.3c
@@ -1227,6 +1283,7 @@ link path=usr/share/man/man3c/strcpy.3c target=string.3c
 link path=usr/share/man/man3c/strcspn.3c target=string.3c
 link path=usr/share/man/man3c/strdup.3c target=string.3c
 link path=usr/share/man/man3c/strdupa.3c target=string.3c
+link path=usr/share/man/man3c/strerror_l.3c target=strerror.3c
 link path=usr/share/man/man3c/strerror_r.3c target=strerror.3c
 link path=usr/share/man/man3c/strfmon_l.3c target=strfmon.3c
 link path=usr/share/man/man3c/strftime_l.3c target=strftime.3c
@@ -1270,10 +1327,14 @@ link path=usr/share/man/man3c/thr_setconcurrency.3c \
     target=thr_getconcurrency.3c
 link path=usr/share/man/man3c/thr_setprio.3c target=thr_getprio.3c
 link path=usr/share/man/man3c/thr_setspecific.3c target=thr_keycreate.3c
+link path=usr/share/man/man3c/thrd_sleep.3c target=nanosleep.3c
+link path=usr/share/man/man3c/timegm.3c target=mktime.3c
 link path=usr/share/man/man3c/timer_getoverrun.3c target=timer_settime.3c
 link path=usr/share/man/man3c/timer_gettime.3c target=timer_settime.3c
 link path=usr/share/man/man3c/timerclear.3c target=timeradd.3c
 link path=usr/share/man/man3c/timercmp.3c target=timeradd.3c
+link path=usr/share/man/man3c/timerfd_gettime.3c target=timerfd_create.3c
+link path=usr/share/man/man3c/timerfd_settime.3c target=timerfd_create.3c
 link path=usr/share/man/man3c/timerisset.3c target=timeradd.3c
 link path=usr/share/man/man3c/timersub.3c target=timeradd.3c
 link path=usr/share/man/man3c/tmpnam_r.3c target=tmpnam.3c
@@ -1283,6 +1344,10 @@ link path=usr/share/man/man3c/towctrans.3c target=wctrans.3c
 link path=usr/share/man/man3c/towctrans_l.3c target=wctrans.3c
 link path=usr/share/man/man3c/towlower_l.3c target=towlower.3c
 link path=usr/share/man/man3c/towupper_l.3c target=towupper.3c
+link path=usr/share/man/man3c/tss_create.3c target=tss.3c
+link path=usr/share/man/man3c/tss_delete.3c target=tss.3c
+link path=usr/share/man/man3c/tss_get.3c target=tss.3c
+link path=usr/share/man/man3c/tss_set.3c target=tss.3c
 link path=usr/share/man/man3c/ttyname_r.3c target=ttyname.3c
 link path=usr/share/man/man3c/twalk.3c target=tsearch.3c
 link path=usr/share/man/man3c/tzset.3c target=ctime.3c

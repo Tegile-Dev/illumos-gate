@@ -21,13 +21,14 @@
 .\"
 .\" Copyright (c) 2009 Sun Microsystems, Inc. All Rights Reserved.
 .\" Copyright 2011 Joshua M. Clulow <josh@sysmgr.org>
-.\" Copyright (c) 2011, 2014 by Delphix. All rights reserved.
+.\" Copyright (c) 2011, 2015 by Delphix. All rights reserved.
 .\" Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
 .\" Copyright (c) 2014, Joyent, Inc. All rights reserved.
 .\" Copyright (c) 2014 by Adam Stevko. All rights reserved.
-.\" Copyright 2015 Nexenta Systems, Inc.  All Rights Reserved.
+.\" Copyright (c) 2014 Integros [integros.com]
+.\" Copyright 2016 Nexenta Systems, Inc.
 .\"
-.Dd June 8, 2015
+.Dd March 20, 2016
 .Dt ZFS 1M
 .Os
 .Sh NAME
@@ -173,14 +174,24 @@
 .Op Fl i Ar snapshot Ns | Ns Ar bookmark
 .Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot
 .Nm
+.Cm send
+.Op Fl Penv
+.Fl t Ar receive_resume_token
+.Nm
 .Cm receive
-.Op Fl Fnuv
+.Op Fl Fnsuv
+.Op Fl o Sy origin Ns = Ns Ar snapshot
 .Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot
 .Nm
 .Cm receive
-.Op Fl Fnuv
+.Op Fl Fnsuv
 .Op Fl d Ns | Ns Fl e
+.Op Fl o Sy origin Ns = Ns Ar snapshot
 .Ar filesystem
+.Nm
+.Cm receive
+.Fl A
+.Ar filesystem Ns | Ns Ar volume
 .Nm
 .Cm allow
 .Ar filesystem Ns | Ns Ar volume
@@ -567,6 +578,13 @@ For cloned file systems or volumes, the snapshot from which the clone was
 created. See also the
 .Sy clones
 property.
+.It Sy receive_resume_token
+For filesystems or volumes which have saved partially-completed state from
+.Sy zfs receive -s ,
+this opaque token can be provided to
+.Sy zfs send -t
+to resume and complete the
+.Sy zfs receive .
 .It Sy referenced
 The amount of data that is accessible by this dataset, which may or may not be
 shared with other datasets in the pool. When a snapshot or clone is created, it
@@ -756,7 +774,7 @@ in which case it will be interpreted as a snapshot in the same filesystem as
 this dataset. The
 .Em snapshot
 may be a full snapshot name
-.No Po Em filesystem Ns @ Ns Em snapshot Pc ,
+.Po Em filesystem Ns @ Ns Em snapshot Pc ,
 which for clones may be a snapshot in the origin's filesystem
 .Pq or the origin of the origin's filesystem, etc.
 .El
@@ -768,17 +786,12 @@ dataset.
 .Sy aclinherit Ns = Ns Sy discard Ns | Ns Sy noallow Ns | Ns
 .Sy restricted Ns | Ns Sy passthrough Ns | Ns Sy passthrough-x
 .Xc
-Controls how
-.Sy ACE Ns s
-are inherited when files and directories are created.
+Controls how ACEs are inherited when files and directories are created.
 .Bl -tag -width "passthrough-x"
 .It Sy discard
-does not inherit any
-.Sy ACE Ns s .
+does not inherit any ACEs.
 .It Sy noallow
-only inherits inheritable
-.Sy ACE Ns s
-that specify
+only inherits inheritable ACEs that specify
 .Qq deny
 permissions.
 .It Sy restricted
@@ -786,13 +799,9 @@ default, removes the
 .Sy write_acl
 and
 .Sy write_owner
-permissions when the
-.Sy ACE
-is inherited.
+permissions when the ACE is inherited.
 .It Sy passthrough
-inherits all inheritable
-.Sy ACE Ns s
-without any modifications.
+inherits all inheritable ACEs without any modifications.
 .It Sy passthrough-x
 same meaning as
 .Sy passthrough ,
@@ -801,69 +810,51 @@ except that the
 .Sy group@ ,
 and
 .Sy everyone@
-.Sy ACE Ns s
-inherit the execute permission only if the file creation mode also requests the
-execute bit.
+ACEs inherit the execute permission only if the file creation mode also requests
+the execute bit.
 .El
 .Pp
 When the property value is set to
 .Sy passthrough ,
-files are created with a mode determined by the inheritable
-.Sy ACE Ns s .
-If no inheritable
-.Sy ACE Ns s
-exist that affect the mode, then the mode is set in accordance to the requested
-mode from the application.
+files are created with a mode determined by the inheritable ACEs.
+If no inheritable ACEs exist that affect the mode, then the mode is set in
+accordance to the requested mode from the application.
 .It Xo
 .Sy aclmode Ns = Ns Sy discard Ns | Ns Sy groupmask Ns | Ns
 .Sy passthrough Ns | Ns Sy restricted
 .Xc
-Controls how an
-.Sy ACL
-is modified during
-.Xr chmod 2 .
+Controls how an ACL is modified during
+.Xr chmod 2
+and how inherited ACEs are modified by the file creation mode.
 .Bl -tag -width "passthrough"
 .It Sy discard
-default, deletes all
-.Sy ACE Ns s
-that do not represent the mode of the file.
-.It Sy groupmask
-reduces permissions granted in all
-.Sy ALLOW
-entries found in the
-.Sy ACL
-such that they are no greater than the group permissions specified by
+default, deletes all ACEs except for those representing the mode of the file or
+directory requested by
 .Xr chmod 2 .
+.It Sy groupmask
+reduces permissions granted by all
+.Sy ALLOW
+entries found in the ACL such that they are no greater than the group
+permissions specified by the mode.
 .It Sy passthrough
-indicates that no changes are made to the
-.Sy ACL
-other than creating or updating the necessary
-.Sy ACE Ns s
-to represent the new mode of the file or directory.
+indicates that no changes are made to the ACL other than creating or updating
+the necessary ACEs to represent the new mode of the file or directory.
 .It Sy restricted
 causes the
 .Xr chmod 2
 operation to return an error when used on any file or directory which has a
-non-trivial
-.Sy ACE Ns s
-whose entries can not be represented by a mode.
+non-trivial ACL, with entries in addition to those that represent the mode.
 .El
 .Pp
 .Xr chmod 2
-is required to change the set user ID, set group ID, or sticky bits on a file or
-directory, as they do not have equivalent
-.Sy ACE Ns s.
-In order to use
+is required to change the set user ID, set group ID, or sticky bit on a file or
+directory, as they do not have equivalent ACEs. In order to use
 .Xr chmod 2
-on a file or directory with a non-trivial
-.Sy ACL
-when
+on a file or directory with a non-trivial ACL when
 .Sy aclmode
 is set to
 .Sy restricted ,
-you must first remove all
-.Sy ACE Ns s
-which do not represent the current mode.
+you must first remove all ACEs except for those that represent the current mode.
 .It Sy atime Ns = Ns Sy on Ns | Ns Sy off
 Controls whether the access time for files is updated when they are read.
 Turning this property off avoids producing write traffic when reading files and
@@ -906,7 +897,8 @@ command.
 This property is not inherited.
 .It Xo
 .Sy checksum Ns = Ns Sy on Ns | Ns Sy off Ns | Ns Sy fletcher2 Ns | Ns
-.Sy fletcher4 Ns | Ns Sy sha256 Ns | Ns Sy noparity
+.Sy fletcher4 Ns | Ns Sy sha256 Ns | Ns Sy noparity Ns | Ns
+.Sy sha512 Ns | Ns Sy skein Ns | Ns Sy edonr
 .Xc
 Controls the checksum used to verify data integrity. The default value is
 .Sy on ,
@@ -924,6 +916,16 @@ This setting is used internally by a dump device residing on a RAID-Z pool and
 should not be used by any other dataset. Disabling checksums is
 .Sy NOT
 a recommended practice.
+.Pp
+The
+.Sy sha512 ,
+.Sy skein ,
+and
+.Sy edonr
+checksum algorithms require enabling the appropriate features on the
+pool. Please see
+.Xr zpool-features 5
+for more information on these algorithms.
 .Pp
 Changing this property affects only newly-written data.
 .It Xo
@@ -1592,7 +1594,7 @@ administrators can use them to annotate datasets
 .Pq file systems, volumes, and snapshots .
 .Pp
 User property names must contain a colon
-.No Po Ns Sy \&:  Ns Pc
+.Pq Qq Sy \&:
 character to distinguish them from native properties. They may contain lowercase
 letters, numbers, and the following punctuation characters: colon
 .Pq Qq Sy \&: ,
@@ -2633,14 +2635,29 @@ origin, etc.
 .El
 .It Xo
 .Nm
+.Cm send
+.Op Fl Penv
+.Fl t
+.Ar receive_resume_token
+.Xc
+Creates a send stream which resumes an interrupted receive.  The
+.Ar receive_resume_token
+is the value of this property on the filesystem
+or volume that was being received into.  See the documentation for
+.Sy zfs receive -s
+for more details.
+.It Xo
+.Nm
 .Cm receive
-.Op Fl Fnuv
+.Op Fl Fnsuv
+.Op Fl o Sy origin Ns = Ns Ar snapshot
 .Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot
 .br
 .Nm
 .Cm receive
-.Op Fl Fnuv
+.Op Fl Fnsuv
 .Op Fl d Ns | Ns Fl e
+.Op Fl o Sy origin Ns = Ns Ar snapshot
 .Ar filesystem
 .Xc
 Creates a snapshot whose contents are as specified in the stream provided on
@@ -2730,12 +2747,52 @@ snapshot as described in the paragraph above.
 Do not actually receive the stream. This can be useful in conjunction with the
 .Fl v
 option to verify the name the receive operation would use.
+.It Fl o Sy origin Ns = Ns Ar snapshot
+Forces the stream to be received as a clone of the given snapshot.
+If the stream is a full send stream, this will create the filesystem
+described by the stream as a clone of the specified snapshot. Which
+snapshot was specified will not affect the success or failure of the
+receive, as long as the snapshot does exist.  If the stream is an
+incremental send stream, all the normal verification will be performed.
 .It Fl u
 File system that is associated with the received stream is not mounted.
 .It Fl v
 Print verbose information about the stream and the time required to perform the
 receive operation.
+.It Fl s
+If the receive is interrupted, save the partially received state, rather
+than deleting it.  Interruption may be due to premature termination of
+the stream
+.Po e.g. due to network failure or failure of the remote system
+if the stream is being read over a network connection
+.Pc ,
+a checksum error in the stream, termination of the
+.Nm zfs Cm receive
+process, or unclean shutdown of the system.
+.Pp
+The receive can be resumed with a stream generated by
+.Nm zfs Cm send Fl t Ar token ,
+where the
+.Ar token
+is the value of the
+.Sy receive_resume_token
+property of the filesystem or volume which is received into.
+.Pp
+To use this flag, the storage pool must have the
+.Sy extensible_dataset
+feature enabled.  See
+.Xr zpool-features 5
+for details on ZFS feature flags.
 .El
+.It Xo
+.Nm
+.Cm receive
+.Fl A
+.Ar filesystem Ns | Ns Ar volume
+.Xc
+Abort an interrupted
+.Nm zfs Cm receive Fl s ,
+deleting its saved partially received state.
 .It Xo
 .Nm
 .Cm allow
@@ -3353,9 +3410,7 @@ mount point permission is set to 755 by default, user
 .Sy cindys
 will be unable to mount file systems under
 .Em tank/cindys .
-Add an
-.Sy ACE
-similar to the following syntax to provide mount point access:
+Add an ACE similar to the following syntax to provide mount point access:
 .Bd -literal
 # chmod A+user:cindys:add_subdirectory:allow /tank/cindys
 .Ed
@@ -3447,7 +3502,7 @@ M       F       /tank/test/modified
 .Sh INTERFACE STABILITY
 .Sy Commited .
 .Sh SEE ALSO
-.Xr gzip 1,
+.Xr gzip 1 ,
 .Xr ssh 1 ,
 .Xr mount 1M ,
 .Xr share 1M ,

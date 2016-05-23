@@ -845,6 +845,7 @@ prt_mad(private_t *pri, int raw, long val)	/* print madvise() argument */
 		case MADV_ACCESS_DEFAULT: s = "MADV_ACCESS_DEFAULT";	break;
 		case MADV_ACCESS_LWP:	s = "MADV_ACCESS_LWP";	break;
 		case MADV_ACCESS_MANY:	s = "MADV_ACCESS_MANY";	break;
+		case MADV_PURGE:	s = "MADV_PURGE";	break;
 		}
 	}
 
@@ -1942,6 +1943,9 @@ tcp_optname(private_t *pri, long val)
 	case TCP_RTO_MIN:		return ("TCP_RTO_MIN");
 	case TCP_RTO_MAX:		return ("TCP_RTO_MAX");
 	case TCP_LINGER2:		return ("TCP_LINGER2");
+	case TCP_KEEPIDLE:		return ("TCP_KEEPIDLE");
+	case TCP_KEEPCNT:		return ("TCP_KEEPCNT");
+	case TCP_KEEPINTVL:		return ("TCP_KEEPINTVL");
 
 	default:			(void) snprintf(pri->code_buf,
 					    sizeof (pri->code_buf),

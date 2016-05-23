@@ -20,7 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2012, 2015 by Delphix. All rights reserved.
  * Copyright (c) 2013, Joyent, Inc.  All rights reserved.
  */
 
@@ -69,10 +69,11 @@ struct proc p0;
  */
 /*ARGSUSED*/
 kthread_t *
-zk_thread_create(void (*func)(), void *arg)
+zk_thread_create(void (*func)(), void *arg, uint64_t len)
 {
 	thread_t tid;
 
+	ASSERT0(len);
 	VERIFY(thr_create(0, 0, (void *(*)(void *))func, arg, THR_DETACHED,
 	    &tid) == 0);
 
@@ -156,7 +157,7 @@ zmutex_destroy(kmutex_t *mp)
 }
 
 void
-mutex_enter(kmutex_t *mp)
+zmutex_enter(kmutex_t *mp)
 {
 	ASSERT(mp->initialized == B_TRUE);
 	ASSERT(mp->m_owner != (void *)-1UL);
@@ -181,7 +182,7 @@ mutex_tryenter(kmutex_t *mp)
 }
 
 void
-mutex_exit(kmutex_t *mp)
+zmutex_exit(kmutex_t *mp)
 {
 	ASSERT(mp->initialized == B_TRUE);
 	ASSERT(mutex_owner(mp) == curthread);
@@ -343,10 +344,13 @@ cv_timedwait_hires(kcondvar_t *cv, kmutex_t *mp, hrtime_t tim, hrtime_t res,
 	timestruc_t ts;
 	hrtime_t delta;
 
-	ASSERT(flag == 0);
+	ASSERT(flag == 0 || flag == CALLOUT_FLAG_ABSOLUTE);
 
 top:
-	delta = tim - gethrtime();
+	delta = tim;
+	if (flag & CALLOUT_FLAG_ABSOLUTE)
+		delta -= gethrtime();
+
 	if (delta <= 0)
 		return (-1);
 
@@ -500,7 +504,7 @@ vn_openat(char *path, int x1, int flags, int mode, vnode_t **vpp, int x2,
 /*ARGSUSED*/
 int
 vn_rdwr(int uio, vnode_t *vp, void *addr, ssize_t len, offset_t offset,
-	int x1, int x2, rlim64_t x3, void *x4, ssize_t *residp)
+    int x1, int x2, rlim64_t x3, void *x4, ssize_t *residp)
 {
 	ssize_t iolen, split;
 

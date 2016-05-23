@@ -21,10 +21,12 @@
 
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2011, 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2011 Pawel Jakub Dawidek. All rights reserved.
+ * Copyright (c) 2011, 2015 by Delphix. All rights reserved.
  * Copyright (c) 2012, Joyent, Inc. All rights reserved.
  * Copyright (c) 2013 Steven Hartland. All rights reserved.
- * Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
+ * Copyright (c) 2014 Integros [integros.com]
+ * Copyright 2016 Nexenta Systems, Inc.
  */
 
 #ifndef	_LIBZFS_H
@@ -209,7 +211,8 @@ extern zpool_handle_t *zpool_open_canfail(libzfs_handle_t *, const char *);
 extern void zpool_close(zpool_handle_t *);
 extern const char *zpool_get_name(zpool_handle_t *);
 extern int zpool_get_state(zpool_handle_t *);
-extern char *zpool_state_to_name(vdev_state_t, vdev_aux_t);
+extern const char *zpool_state_to_name(vdev_state_t, vdev_aux_t);
+extern const char *zpool_pool_state_to_name(pool_state_t);
 extern void zpool_free_handles(libzfs_handle_t *);
 
 /*
@@ -217,6 +220,7 @@ extern void zpool_free_handles(libzfs_handle_t *);
  */
 typedef int (*zpool_iter_f)(zpool_handle_t *, void *);
 extern int zpool_iter(libzfs_handle_t *, zpool_iter_f, void *);
+extern boolean_t zpool_skip_pool(const char *);
 
 /*
  * Functions to create and destroy pools
@@ -260,7 +264,7 @@ extern nvlist_t *zpool_find_vdev(zpool_handle_t *, const char *, boolean_t *,
     boolean_t *, boolean_t *);
 extern nvlist_t *zpool_find_vdev_by_physpath(zpool_handle_t *, const char *,
     boolean_t *, boolean_t *, boolean_t *);
-extern int zpool_label_disk(libzfs_handle_t *, zpool_handle_t *, char *);
+extern int zpool_label_disk(libzfs_handle_t *, zpool_handle_t *, const char *);
 
 /*
  * Functions to manage pool properties
@@ -322,7 +326,7 @@ typedef enum {
 	ZPOOL_STATUS_VERSION_OLDER,	/* older legacy on-disk version */
 	ZPOOL_STATUS_FEAT_DISABLED,	/* supported features are disabled */
 	ZPOOL_STATUS_RESILVERING,	/* device being resilvered */
-	ZPOOL_STATUS_OFFLINE_DEV,	/* device online */
+	ZPOOL_STATUS_OFFLINE_DEV,	/* device offline */
 	ZPOOL_STATUS_REMOVED_DEV,	/* removed device */
 
 	/*
@@ -406,6 +410,7 @@ extern void zfs_close(zfs_handle_t *);
 extern zfs_type_t zfs_get_type(const zfs_handle_t *);
 extern const char *zfs_get_name(const zfs_handle_t *);
 extern zpool_handle_t *zfs_get_pool_handle(const zfs_handle_t *);
+extern const char *zfs_get_pool_name(const zfs_handle_t *);
 
 /*
  * Property management functions.  Some functions are shared with the kernel,
@@ -421,7 +426,7 @@ extern const char *zfs_prop_column_name(zfs_prop_t);
 extern boolean_t zfs_prop_align_right(zfs_prop_t);
 
 extern nvlist_t *zfs_valid_proplist(libzfs_handle_t *, zfs_type_t,
-    nvlist_t *, uint64_t, zfs_handle_t *, const char *);
+    nvlist_t *, uint64_t, zfs_handle_t *, zpool_handle_t *, const char *);
 
 extern const char *zfs_prop_to_name(zfs_prop_t);
 extern int zfs_prop_set(zfs_handle_t *, const char *, const char *);
@@ -532,7 +537,7 @@ extern int zfs_iter_root(libzfs_handle_t *, zfs_iter_f, void *);
 extern int zfs_iter_children(zfs_handle_t *, zfs_iter_f, void *);
 extern int zfs_iter_dependents(zfs_handle_t *, boolean_t, zfs_iter_f, void *);
 extern int zfs_iter_filesystems(zfs_handle_t *, zfs_iter_f, void *);
-extern int zfs_iter_snapshots(zfs_handle_t *, zfs_iter_f, void *);
+extern int zfs_iter_snapshots(zfs_handle_t *, boolean_t, zfs_iter_f, void *);
 extern int zfs_iter_snapshots_sorted(zfs_handle_t *, zfs_iter_f, void *);
 extern int zfs_iter_snapspec(zfs_handle_t *, const char *, zfs_iter_f, void *);
 extern int zfs_iter_bookmarks(zfs_handle_t *, zfs_iter_f, void *);
@@ -604,6 +609,10 @@ typedef boolean_t (snapfilter_cb_t)(zfs_handle_t *, void *);
 extern int zfs_send(zfs_handle_t *, const char *, const char *,
     sendflags_t *, int, snapfilter_cb_t, void *, nvlist_t **);
 extern int zfs_send_one(zfs_handle_t *, const char *, int, enum lzc_send_flags);
+extern int zfs_send_resume(libzfs_handle_t *, sendflags_t *, int outfd,
+    const char *);
+extern nvlist_t *zfs_send_resume_token_to_nvlist(libzfs_handle_t *hdl,
+    const char *token);
 
 extern int zfs_promote(zfs_handle_t *);
 extern int zfs_hold(zfs_handle_t *, const char *, const char *,
@@ -644,6 +653,12 @@ typedef struct recvflags {
 	/* set "canmount=off" on all modified filesystems */
 	boolean_t canmountoff;
 
+	/*
+	 * Mark the file systems as "resumable" and do not destroy them if the
+	 * receive is interrupted
+	 */
+	boolean_t resumable;
+
 	/* byteswap flag is used internally; callers need not specify */
 	boolean_t byteswap;
 
@@ -651,8 +666,8 @@ typedef struct recvflags {
 	boolean_t nomount;
 } recvflags_t;
 
-extern int zfs_receive(libzfs_handle_t *, const char *, recvflags_t *,
-    int, avl_tree_t *);
+extern int zfs_receive(libzfs_handle_t *, const char *, nvlist_t *,
+    recvflags_t *, int, avl_tree_t *);
 
 typedef enum diff_flags {
 	ZFS_DIFF_PARSEABLE = 0x1,

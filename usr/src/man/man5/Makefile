@@ -14,6 +14,7 @@
 # Copyright (c) 2012 by Delphix. All rights reserved.
 # Copyright 2014 Nexenta Systems, Inc.
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
+# Copyright (c) 2015, Joyent, Inc.  All rights reserved.
 #
 
 include		$(SRC)/Makefile.master
@@ -29,6 +30,7 @@ MANFILES=	Intro.5			\
 		audit_remote.5		\
 		audit_syslog.5		\
 		brands.5		\
+		byteorder.5		\
 		cancellation.5		\
 		charmap.5		\
 		condition.5		\
@@ -41,8 +43,10 @@ MANFILES=	Intro.5			\
 		device_clean.5		\
 		dhcp.5			\
 		environ.5		\
+		epoll.5			\
 		eqn.5			\
 		eqnchar.5		\
+		eventfd.5		\
 		extendedFILE.5		\
 		filesystem.5		\
 		fnmatch.5		\
@@ -119,6 +123,7 @@ MANFILES=	Intro.5			\
 		tecla.5			\
 		term.5			\
 		threads.5		\
+		timerfd.5		\
 		trusted_extensions.5	\
 		vgrindefs.5		\
 		zones.5			\
@@ -150,6 +155,7 @@ MANLINKS=	ANSI.5		\
 		architecture.5	\
 		availability.5	\
 		compile.5	\
+		endian.5	\
 		intro.5		\
 		pthreads.5	\
 		stability.5	\
@@ -165,6 +171,8 @@ architecture.5	:= LINKSRC = attributes.5
 availability.5	:= LINKSRC = attributes.5
 stability.5	:= LINKSRC = attributes.5
 standard.5	:= LINKSRC = attributes.5
+
+endian.5	:= LINKSRC = byteorder.5
 
 RBAC.5		:= LINKSRC = rbac.5
 

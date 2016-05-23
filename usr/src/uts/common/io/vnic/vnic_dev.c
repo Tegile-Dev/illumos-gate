@@ -20,7 +20,8 @@
  */
 /*
  * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Joyent, Inc.  All rights reserved.
+ * Copyright 2015 Joyent, Inc.
+ * Copyright 2016 OmniTI Computer Consulting, Inc. All rights reserved.
  */
 
 #include <sys/types.h>
@@ -571,7 +572,19 @@ vnic_dev_create(datalink_id_t vnic_id, datalink_id_t linkid,
 	ASSERT(err == 0);
 	vnic_count++;
 
+	/*
+	 * Now that we've enabled this VNIC, we should go through and update the
+	 * link state by setting it to our parents.
+	 */
 	vnic->vn_enabled = B_TRUE;
+
+	if (is_anchor) {
+		mac_link_update(vnic->vn_mh, LINK_STATE_UP);
+	} else {
+		mac_link_update(vnic->vn_mh,
+		    mac_client_stat_get(vnic->vn_mch, MAC_STAT_LINK_STATE));
+	}
+
 	rw_exit(&vnic_lock);
 
 	return (0);
@@ -1086,7 +1099,7 @@ vnic_m_getprop(void *arg, const char *pr_name, mac_prop_id_t pr_num,
 		ret = vnic_get_secondary_macs(vn, pr_valsize, pr_val);
 		break;
 	default:
-		ret = EINVAL;
+		ret = ENOTSUP;
 		break;
 	}
 

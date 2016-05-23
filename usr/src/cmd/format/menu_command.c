@@ -22,6 +22,8 @@
  * Copyright (c) 1993, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2012 Milan Jurik. All rights reserved.
  * Copyright 2014 Toomas Soome <tsoome@me.com>
+ * Copyright 2015 Nexenta Systems, Inc. All rights reserved.
+ * Copyright 2016 Igor Kozhukhov <ikozhukhov@gmail.com>
  */
 
 /*
@@ -1620,7 +1622,8 @@ c_label()
 		(void) memset((char *)&label, 0, sizeof (struct dk_label));
 
 		(void) strcpy(x86_devname, cur_disk->disk_name);
-		if (cur_ctype->ctype_ctype == DKC_DIRECT)
+		if (cur_ctype->ctype_ctype == DKC_DIRECT ||
+		    cur_ctype->ctype_ctype == DKC_BLKDEV)
 			dptr = auto_direct_get_geom_label(cur_file,  &label);
 		else
 			dptr = auto_sense(cur_file, 1, &label);
@@ -1670,7 +1673,7 @@ c_label()
 			}
 		}
 
-		if (get_disk_info(cur_file, &efinfo) != 0) {
+		if (get_disk_info(cur_file, &efinfo, cur_disk) != 0) {
 			return (-1);
 		}
 		(void) memset((char *)&label, 0, sizeof (struct dk_label));
@@ -2056,7 +2059,7 @@ c_verify_efi()
 	struct	partition_info	tmp_pinfo;
 	int status;
 
-	status = read_efi_label(cur_file, &efi_info);
+	status = read_efi_label(cur_file, &efi_info, cur_disk);
 	if (status != 0) {
 		err_print("Warning: Could not read label.\n");
 		return (-1);
@@ -2086,6 +2089,10 @@ c_verify_efi()
 	    cur_parts->etoc->efi_last_u_lba);
 
 	print_map(&tmp_pinfo);
+
+	free(efi_info.vendor);
+	free(efi_info.product);
+	free(efi_info.revision);
 	return (0);
 }
 

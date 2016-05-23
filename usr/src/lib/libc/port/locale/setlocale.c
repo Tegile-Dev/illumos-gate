@@ -47,17 +47,18 @@
 #include "collate.h"
 #include "lnumeric.h"	/* for struct lc_numeric */
 #include "lctype.h"	/* for struct lc_ctype */
+#include "runetype.h"
 #include "setlocale.h"
 #include "../i18n/_loc_path.h"
 #include "localeimpl.h"
 #include "../i18n/_locale.h"
+#include "libc.h"
 
 /*
  * Path to locale storage directory.  See ../i18n/_loc_path.h
  */
 char	*_PathLocale = _DFLT_LOC_PATH;
 
-static char	*current_locale(locale_t, int);
 static void	install_legacy(locale_t, int);
 
 static mutex_t setlocale_lock = DEFAULTMUTEX;
@@ -119,7 +120,7 @@ setlocale(int category, const char *locname)
 	return (current_locale(loc, category));
 }
 
-static char *
+char *
 current_locale(locale_t loc, int cat)
 {
 	switch (cat) {

@@ -20,8 +20,10 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2012, 2015 by Delphix. All rights reserved.
  * Copyright 2014 Nexenta Systems, Inc.  All rights reserved.
+ * Copyright (c) 2014 Integros [integros.com]
+ * Copyright 2015 Joyent, Inc.
  */
 
 /* Portions Copyright 2007 Jeremy Teo */
@@ -1734,12 +1736,9 @@ top:
 	dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, FALSE, NULL);
 
 	/*
-	 * Mark this transaction as typically resulting in a net free of
-	 * space, unless object removal will be delayed indefinitely
-	 * (due to active holds on the vnode due to the file being open).
+	 * Mark this transaction as typically resulting in a net free of space
 	 */
-	if (may_delete_now)
-		dmu_tx_mark_netfree(tx);
+	dmu_tx_mark_netfree(tx);
 
 	error = dmu_tx_assign(tx, waited ? TXG_WAITED : TXG_NOWAIT);
 	if (error) {
@@ -2404,7 +2403,8 @@ zfs_readdir(vnode_t *vp, uio_t *uio, cred_t *cr, int *eofp,
 
 		/* Prefetch znode */
 		if (prefetch)
-			dmu_prefetch(os, objnum, 0, 0);
+			dmu_prefetch(os, objnum, 0, 0, 0,
+			    ZIO_PRIORITY_SYNC_READ);
 
 	skip_entry:
 		/*
@@ -3447,7 +3447,7 @@ zfs_rename(vnode_t *sdvp, char *snm, vnode_t *tdvp, char *tnm, cred_t *cr,
 	dmu_tx_t	*tx;
 	zfs_zlock_t	*zl;
 	int		cmp, serr, terr;
-	int		error = 0;
+	int		error = 0, rm_err = 0;
 	int		zflg = 0;
 	boolean_t	waited = B_FALSE;
 
@@ -3659,16 +3659,16 @@ top:
 		}
 	}
 
-	vnevent_rename_src(ZTOV(szp), sdvp, snm, ct);
+	vnevent_pre_rename_src(ZTOV(szp), sdvp, snm, ct);
 	if (tzp)
-		vnevent_rename_dest(ZTOV(tzp), tdvp, tnm, ct);
+		vnevent_pre_rename_dest(ZTOV(tzp), tdvp, tnm, ct);
 
 	/*
 	 * notify the target directory if it is not the same
 	 * as source directory.
 	 */
 	if (tdvp != sdvp) {
-		vnevent_rename_dest_dir(tdvp, ct);
+		vnevent_pre_rename_dest_dir(tdvp, ZTOV(szp), tnm, ct);
 	}
 
 	tx = dmu_tx_create(zfsvfs->z_os);
@@ -3712,7 +3712,7 @@ top:
 	}
 
 	if (tzp)	/* Attempt to remove the existing target */
-		error = zfs_link_destroy(tdl, tzp, tx, zflg, NULL);
+		error = rm_err = zfs_link_destroy(tdl, tzp, tx, zflg, NULL);
 
 	if (error == 0) {
 		error = zfs_link_create(tdl, szp, tx, ZRENAMING);
@@ -3754,6 +3754,16 @@ top:
 	}
 
 	dmu_tx_commit(tx);
+
+	if (tzp && rm_err == 0)
+		vnevent_rename_dest(ZTOV(tzp), tdvp, tnm, ct);
+
+	if (error == 0) {
+		vnevent_rename_src(ZTOV(szp), sdvp, snm, ct);
+		/* notify the target dir if it is not the same as source dir */
+		if (tdvp != sdvp)
+			vnevent_rename_dest_dir(tdvp, ct);
+	}
 out:
 	if (zl != NULL)
 		zfs_rename_unlock(&zl);
@@ -4136,7 +4146,7 @@ top:
 /* ARGSUSED */
 static int
 zfs_null_putapage(vnode_t *vp, page_t *pp, u_offset_t *offp,
-		size_t *lenp, int flags, cred_t *cr)
+    size_t *lenp, int flags, cred_t *cr)
 {
 	pvn_write_done(pp, B_INVAL|B_FORCE|B_ERROR);
 	return (0);
@@ -4162,7 +4172,7 @@ zfs_null_putapage(vnode_t *vp, page_t *pp, u_offset_t *offp,
 /* ARGSUSED */
 static int
 zfs_putapage(vnode_t *vp, page_t *pp, u_offset_t *offp,
-		size_t *lenp, int flags, cred_t *cr)
+    size_t *lenp, int flags, cred_t *cr)
 {
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;

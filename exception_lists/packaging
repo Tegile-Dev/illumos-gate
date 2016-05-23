@@ -22,8 +22,8 @@
 #
 # Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
 # Copyright 2012 OmniTI Computer Consulting, Inc.  All rights reserved.
-# Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
+# Copyright 2014 Nexenta Systems, Inc.  All rights reserved.
 #
 
 #
@@ -179,17 +179,6 @@ usr/4lib				i386
 usr/include/sys/libc_kernel.h
 usr/include/sys/synch32.h
 #
-# These files are installed in the proto area by the build of libproc for
-# the benefit of the builds of cmd/truss, cmd/gcore and cmd/ptools, which
-# use libproc as their common process-control library.  These are not
-# interfaces for customer use, so the files are excluded from packaging.
-#
-lib/llib-lproc
-lib/llib-lproc.ln
-lib/amd64/llib-lproc.ln		i386
-lib/sparcv9/llib-lproc.ln	sparc
-usr/include/libproc.h
-#
 # Private interfaces for libdisasm
 #
 usr/include/libdisasm.h
@@ -344,6 +333,7 @@ etc/sfw
 # Entries for the libmech_krb5 symlink, which has been included
 # for build purposes only, not delivered to customers.
 #
+usr/include/gssapi/gssapi_krb5.h
 usr/lib/gss/libmech_krb5.so
 usr/lib/amd64/gss/libmech_krb5.so	i386
 usr/lib/sparcv9/gss/libmech_krb5.so	sparc
@@ -452,25 +442,6 @@ usr/include/sys/crypto/elfsign.h
 usr/include/sys/crypto/impl.h
 usr/include/sys/crypto/ops_impl.h
 usr/include/sys/crypto/sched_impl.h
-#
-# The following files are installed in the proto area
-# by the build of libavl (AVL Tree Interface Library).
-# libavl contains interfaces which are all private interfaces.
-#
-lib/libavl.so
-lib/amd64/libavl.so		i386
-lib/sparcv9/libavl.so		sparc
-lib/llib-lavl
-lib/llib-lavl.ln
-lib/amd64/llib-lavl.ln		i386
-lib/sparcv9/llib-lavl.ln	sparc
-usr/lib/libavl.so
-usr/lib/amd64/libavl.so		i386
-usr/lib/sparcv9/libavl.so	sparc
-usr/lib/llib-lavl
-usr/lib/llib-lavl.ln
-usr/lib/amd64/llib-lavl.ln	i386
-usr/lib/sparcv9/llib-lavl.ln	sparc
 #
 # The following files are installed in the proto area
 # by the build of libcmdutils (Command Utilities Library).
@@ -766,10 +737,6 @@ usr/lib/amd64/libfakekernel.so.1		i386
 usr/lib/sparcv9/libfakekernel.so		sparc
 usr/lib/sparcv9/libfakekernel.so.1		sparc
 #
-# Private/Internal dtrace scripts of smbsrv. Do not ship.
-#
-usr/lib/smbsrv/dtrace
-#
 # Private/Internal libraries of smbsrv. Do not ship.
 #
 usr/lib/mdb/proc/libfksmbsrv.so
@@ -1012,3 +979,8 @@ usr/lib/sparcv9/llib-lpcidb.ln		sparc
 usr/lib/libpcidb.so
 usr/lib/llib-lpcidb
 usr/lib/llib-lpcidb.ln
+
+#
+# debugging program for libadutils
+#
+usr/bin/test-getdc

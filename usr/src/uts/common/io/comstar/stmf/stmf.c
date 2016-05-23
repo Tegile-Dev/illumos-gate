@@ -2525,8 +2525,7 @@ stmf_load_ppd_ioctl(stmf_ppioctl_data_t *ppi, uint64_t *ppi_token,
 	}
 
 	/* Free any existing lists and add this one to the ppd */
-	if (ppd->ppd_nv)
-		nvlist_free(ppd->ppd_nv);
+	nvlist_free(ppd->ppd_nv);
 	ppd->ppd_nv = nv;
 
 	/* set the token for writes */
@@ -2598,8 +2597,7 @@ stmf_delete_ppd(stmf_pp_data_t *ppd)
 		return;
 
 	*pppd = ppd->ppd_next;
-	if (ppd->ppd_nv)
-		nvlist_free(ppd->ppd_nv);
+	nvlist_free(ppd->ppd_nv);
 
 	kmem_free(ppd, ppd->ppd_alloc_size);
 }
@@ -3182,8 +3180,7 @@ stmf_deregister_lu(stmf_lu_t *lu)
 		return (STMF_BUSY);
 	}
 	if (ilu->ilu_kstat_info) {
-		kmem_free(ilu->ilu_kstat_info->ks_data,
-		    ilu->ilu_kstat_info->ks_data_size);
+		kmem_free(ilu->ilu_kstat_info->ks_data, STMF_KSTAT_LU_SZ);
 		kstat_delete(ilu->ilu_kstat_info);
 	}
 	if (ilu->ilu_kstat_io) {
@@ -3361,7 +3358,7 @@ stmf_deregister_local_port(stmf_local_port_t *lport)
 	}
 	if (ilport->ilport_kstat_info) {
 		kmem_free(ilport->ilport_kstat_info->ks_data,
-		    ilport->ilport_kstat_info->ks_data_size);
+		    STMF_KSTAT_TGT_SZ);
 		kstat_delete(ilport->ilport_kstat_info);
 	}
 	if (ilport->ilport_kstat_io) {

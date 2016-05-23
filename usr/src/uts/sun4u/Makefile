@@ -21,6 +21,7 @@
 #
 # Copyright 2009 Sun Microsystems, Inc.  All rights reserved.
 # Use is subject to license terms.
+# Copyright 2015 Igor Kozhukhov <ikozhukhov@gmail.com>
 #
 #	This makefile drives the production of all implementation architecture
 #	dependent modules for the sun4u architecture.
@@ -54,7 +55,7 @@ def.prereq	:=	TARGET= def
 all		:=	TARGET= all
 all.prereq	:=	TARGET= all
 install		:=	TARGET= install
-install.prereq	:=	TARGET= all
+install.prereq	:=	TARGET= install
 install_h	:=	TARGET= install_h
 install_h.prere	:=	TARGET= install_h
 clean		:=	TARGET= clean
@@ -112,7 +113,7 @@ genassym unix $(KMODS):	FRC
 PRIVS_C = $(UTSBASE)/common/os/priv_const.c
 
 $(PRIVS_C): $(PRIVS_AWK) $(PRIVS_DEF)
-	$(NAWK) -f $(PRIVS_AWK) < $(PRIVS_DEF) cfile=$@
+	$(AWK) -f $(PRIVS_AWK) < $(PRIVS_DEF) cfile=$@
 
 CLOBBERFILES += $(PRIVS_C)
 

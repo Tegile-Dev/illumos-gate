@@ -20,8 +20,8 @@
  */
 
 /*
- * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2015 Nexenta Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
  */
 
 /*
@@ -894,10 +894,8 @@ out:
 
 err:
 	if (error != 0) {
-		if (exp->ex_flags != NULL)
-			free(exp->ex_tag);
-		if (exp->ex_log_buffer != NULL)
-			free(exp->ex_log_buffer);
+		free(exp->ex_tag);
+		free(exp->ex_log_buffer);
 		(void) fprintf(stderr,
 		    dgettext(TEXT_DOMAIN, "Cannot set log configuration: %s\n"),
 		    strerror(error));
@@ -1096,6 +1094,7 @@ get_rootnames(seconfig_t *sec, char *list, int *count)
 	if (a == NULL) {
 		(void) printf(dgettext(TEXT_DOMAIN,
 		    "get_rootnames: no memory\n"));
+		*count = 0;
 	} else {
 		for (i = 0; i < c; i++) {
 			host = strtok(list, ":");
@@ -1104,6 +1103,7 @@ get_rootnames(seconfig_t *sec, char *list, int *count)
 					free(a[--i]);
 				free(a);
 				a = NULL;
+				*count = 0;
 				break;
 			}
 			list = NULL;

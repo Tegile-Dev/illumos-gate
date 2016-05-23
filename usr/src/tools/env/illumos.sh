@@ -19,7 +19,7 @@
 # CDDL HEADER END
 #
 # Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
-# Copyright 2010, 2011 Nexenta Systems, Inc.  All rights reserved.
+# Copyright 2015 Nexenta Systems, Inc.  All rights reserved.
 # Copyright 2012 Joshua M. Clulow <josh@sysmgr.org>
 # Copyright 2015, OmniTI Computer Consulting, Inc. All rights reserved.
 #
@@ -47,21 +47,9 @@
 #
 export NIGHTLY_OPTIONS='-FnCDAlmprt'
 
-#
-# -- PLEASE READ THIS --
-#
-# The variables  GATE and CODEMGR_WS must always be customised to
-# match your workspace/gate location!!
-#
-# -- PLEASE READ THIS --
-#
-
-# This is a variable for the rest of the script - GATE doesn't matter to
-# nightly itself
-export GATE='testws'
-
-# CODEMGR_WS - where is your workspace at (or what should nightly name it)
-export CODEMGR_WS="$HOME/ws/$GATE"
+# CODEMGR_WS - where is your workspace at
+#export CODEMGR_WS="$HOME/ws/illumos-gate"
+export CODEMGR_WS="`git rev-parse --show-toplevel`"
 
 # Maximum number of dmake jobs.  The recommended number is 2 + NCPUS,
 # where NCPUS is the number of logical CPUs on your build system.
@@ -135,13 +123,11 @@ export LOGFILE="$ATLOG/nightly.log"
 export MACH="$(uname -p)"
 
 #
-#  The following two macros are the closed/crypto binaries.  Once
-#  Illumos has totally freed itself, we can remove these references.
+#  The following macro points to the closed binaries.  Once illumos has
+#  totally freed itself, we can remove this reference.
 #
 # Location of encumbered binaries.
 export ON_CLOSED_BINS="$CODEMGR_WS/closed"
-# Location of signed cryptographic binaries.
-export ON_CRYPTO_BINS="$CODEMGR_WS/on-crypto.$MACH.tar.bz2"
 
 # REF_PROTO_LIST - for comparing the list of stuff in your proto area
 # with. Generally this should be left alone, since you want to see differences
@@ -160,7 +146,7 @@ export MULTI_PROTO="no"
 # when the release slips (nah) or you move an environment file to a new
 # release
 #
-export VERSION="$GATE"
+export VERSION="`git describe --long --all HEAD | cut -d/ -f2-`"
 
 #
 # the RELEASE and RELEASE_DATE variables are set in Makefile.master;
@@ -194,13 +180,14 @@ export PKGFMT_OUTPUT='v1'
 # one problem.
 export MAKEFLAGS='k'
 
-# Magic variable to prevent the devpro compilers/teamware from sending
-# mail back to devpro on every use.
+# Magic variables to prevent the devpro compilers/teamware from checking
+# for updates or sending mail back to devpro on every use.
+export SUNW_NO_UPDATE_NOTIFY='1'
 export UT_NO_USAGE_TRACKING='1'
 
 # Build tools - don't change these unless you know what you're doing.  These
-# variables allows you to get the compilers and onbld files locally or
-# through cachefs.  Set BUILD_TOOLS to pull everything from one location.
+# variables allows you to get the compilers and onbld files locally.
+# Set BUILD_TOOLS to pull everything from one location.
 # Alternately, you can set ONBLD_TOOLS to where you keep the contents of
 # SUNWonbld and SPRO_ROOT to where you keep the compilers.  SPRO_VROOT
 # exists to make it easier to test new versions of the compiler.
@@ -209,16 +196,15 @@ export BUILD_TOOLS='/opt'
 export SPRO_ROOT='/opt/SUNWspro'
 export SPRO_VROOT="$SPRO_ROOT"
 
+# Disable shadow compilation by default.
+export CW_NO_SHADOW='1'
+
 # This goes along with lint - it is a series of the form "A [y|n]" which
 # means "go to directory A and run 'make lint'" Then mail me (y) the
 # difference in the lint output. 'y' should only be used if the area you're
 # linting is actually lint clean or you'll get lots of mail.
 # You shouldn't need to change this though.
 #export LINTDIRS="$SRC y"
-
-# Set this flag to 'n' to disable the automatic validation of the dmake
-# version in use.  The default is to check it.
-#CHECK_DMAKE='y'
 
 # Set this flag to 'n' to disable the use of 'checkpaths'.  The default,
 # if the 'N' option is not specified, is to run this test.

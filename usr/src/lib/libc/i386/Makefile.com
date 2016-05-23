@@ -20,7 +20,7 @@
 #
 #
 # Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2015, Joyent, Inc.  All rights reserved.
+# Copyright 2016 Joyent, Inc.
 # Copyright (c) 2013, OmniTI Computer Consulting, Inc. All rights reserved.
 # Copyright 2013 Garrett D'Amore <garrett@damore.org>
 #
@@ -122,6 +122,7 @@ GENOBJS=			\
 	byteorder64.o		\
 	cuexit.o		\
 	ecvt.o			\
+	endian.o		\
 	errlst.o		\
 	i386_data.o		\
 	ladd.o			\
@@ -418,6 +419,7 @@ PORTGEN=			\
 	fdetach.o		\
 	fdopendir.o		\
 	ffs.o			\
+	flock.o			\
 	fls.o			\
 	fmtmsg.o		\
 	ftime.o			\
@@ -594,6 +596,7 @@ PORTGEN=			\
 	tfind.o			\
 	time_data.o		\
 	time_gdata.o		\
+	timespec_get.o		\
 	tls_data.o		\
 	truncate.o		\
 	tsdalloc.o		\
@@ -854,6 +857,7 @@ THREADSOBJS=			\
 	alloc.o			\
 	assfail.o		\
 	cancel.o		\
+	c11_thr.o		\
 	door_calls.o		\
 	tmem.o			\
 	pthr_attr.o		\
@@ -903,6 +907,8 @@ PORTSYS=			\
 	chmod.o			\
 	chown.o			\
 	corectl.o		\
+	epoll.o			\
+	eventfd.o		\
 	exacctsys.o		\
 	execl.o			\
 	execle.o		\
@@ -940,6 +946,7 @@ PORTSYS=			\
 	sidsys.o		\
 	siginterrupt.o		\
 	signal.o		\
+	signalfd.o		\
 	sigpending.o		\
 	sigstack.o		\
 	stat.o			\
@@ -947,6 +954,7 @@ PORTSYS=			\
 	tasksys.o		\
 	time.o			\
 	time_util.o		\
+	timerfd.o		\
 	ucontext.o		\
 	unlink.o		\
 	ustat.o			\
@@ -958,6 +966,9 @@ PORTREGEX=			\
 	regcmp.o		\
 	regex.o			\
 	wordexp.o
+
+PORTREGEX64=			\
+	glob64.o
 
 MOSTOBJS=			\
 	$(STRETS)		\
@@ -981,6 +992,7 @@ MOSTOBJS=			\
 	$(PORTPRINT_C89)	\
 	$(PORTPRINT_W)		\
 	$(PORTREGEX)		\
+	$(PORTREGEX64)		\
 	$(PORTSTDIO)		\
 	$(PORTSTDIO64)		\
 	$(PORTSTDIO_C89)	\
@@ -1213,6 +1225,9 @@ $(SYSOBJS64:%=pics/%) := \
 $(PORTGEN64:%=pics/%) := \
 	CPPFLAGS += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 
+$(PORTREGEX64:%=pics/%) := \
+	CPPFLAGS += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+
 $(PORTSTDIO64:%=pics/%) := \
 	CPPFLAGS += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 
@@ -1296,7 +1311,7 @@ $(ASSYMDEP_OBJS:%=pics/%): assym.h
 GENASSYM_C = $(LIBCDIR)/$(MACH)/genassym.c
 
 genassym: $(GENASSYM_C)
-	$(NATIVECC) -I$(LIBCBASE)/inc -I$(LIBCDIR)/inc	\
+	$(NATIVECC) $(NATIVE_CFLAGS) -I$(LIBCBASE)/inc -I$(LIBCDIR)/inc	\
 		-D__EXTENSIONS__ $(CPPFLAGS.native) -o $@ $(GENASSYM_C)
 
 OFFSETS = $(LIBCDIR)/$(MACH)/offsets.in

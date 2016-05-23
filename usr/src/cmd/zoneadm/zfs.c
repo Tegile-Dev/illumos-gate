@@ -23,6 +23,7 @@
  * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2012 by Delphix. All rights reserved.
  * Copyright (c) 2012, Joyent, Inc. All rights reserved.
+ * Copyright (c) 2016 Martin Matuska. All rights reserved.
  */
 
 /*
@@ -247,7 +248,7 @@ get_snap_max(zfs_handle_t *zhp, void *data)
 			cbp->max = num;
 	}
 
-	res = zfs_iter_snapshots(zhp, get_snap_max, data);
+	res = zfs_iter_snapshots(zhp, B_FALSE, get_snap_max, data);
 	zfs_close(zhp);
 	return (res);
 }
@@ -276,7 +277,7 @@ take_snapshot(zfs_handle_t *zhp, char *snapshot_name, int snap_size,
 	cb.len = strlen(template);
 	cb.max = 0;
 
-	if (zfs_iter_snapshots(zhp, get_snap_max, &cb) != 0)
+	if (zfs_iter_snapshots(zhp, B_FALSE, get_snap_max, &cb) != 0)
 		return (Z_ERR);
 
 	cb.max++;
@@ -381,8 +382,7 @@ clone_snap(char *snapshot_name, char *zonepath)
 	    "off") != 0) ||
 	    (nvlist_add_string(props, zfs_prop_to_name(ZFS_PROP_SHARESMB),
 	    "off") != 0)) {
-		if (props != NULL)
-			nvlist_free(props);
+		nvlist_free(props);
 		(void) fprintf(stderr, gettext("could not create ZFS clone "
 		    "%s: out of memory\n"), zonepath);
 		return (Z_ERR);
@@ -737,7 +737,7 @@ promote_clone(zfs_handle_t *src_zhp, zfs_handle_t *cln_zhp)
 	sd.len = strlen(template);
 	sd.max = 0;
 
-	if (zfs_iter_snapshots(cln_zhp, get_snap_max, &sd) != 0)
+	if (zfs_iter_snapshots(cln_zhp, B_FALSE, get_snap_max, &sd) != 0)
 		return (Z_ERR);
 
 	/*
@@ -750,7 +750,7 @@ promote_clone(zfs_handle_t *src_zhp, zfs_handle_t *cln_zhp)
 	sd.len = strlen(template);
 	sd.num = 0;
 
-	if (zfs_iter_snapshots(src_zhp, get_snap_max, &sd) != 0)
+	if (zfs_iter_snapshots(src_zhp, B_FALSE, get_snap_max, &sd) != 0)
 		return (Z_ERR);
 
 	/*
@@ -759,7 +759,7 @@ promote_clone(zfs_handle_t *src_zhp, zfs_handle_t *cln_zhp)
 	 */
 	sd.max++;
 	sd.cntr = 0;
-	if (zfs_iter_snapshots(src_zhp, rename_snap, &sd) != 0)
+	if (zfs_iter_snapshots(src_zhp, B_FALSE, rename_snap, &sd) != 0)
 		return (Z_ERR);
 
 	/* close and reopen the clone dataset to get the latest info */
@@ -791,7 +791,7 @@ promote_all_clones(zfs_handle_t *zhp)
 	cd.origin_creation = 0;
 	cd.snapshot = NULL;
 
-	if (zfs_iter_snapshots(zhp, find_clone, &cd) != 0) {
+	if (zfs_iter_snapshots(zhp, B_FALSE, find_clone, &cd) != 0) {
 		zfs_close(zhp);
 		return (Z_ERR);
 	}
@@ -988,8 +988,7 @@ create_zfs_zonepath(char *zonepath)
 	    "off") != 0) ||
 	    (nvlist_add_string(props, zfs_prop_to_name(ZFS_PROP_SHARESMB),
 	    "off") != 0)) {
-		if (props != NULL)
-			nvlist_free(props);
+		nvlist_free(props);
 		(void) fprintf(stderr, gettext("cannot create ZFS dataset %s: "
 		    "out of memory\n"), zfs_name);
 	}
@@ -1043,7 +1042,7 @@ destroy_zfs(char *zonepath)
 		return (Z_ERR);
 
 	/* Now cleanup any snapshots remaining. */
-	if (zfs_iter_snapshots(zhp, rm_snap, NULL) != 0) {
+	if (zfs_iter_snapshots(zhp, B_FALSE, rm_snap, NULL) != 0) {
 		zfs_close(zhp);
 		return (Z_ERR);
 	}

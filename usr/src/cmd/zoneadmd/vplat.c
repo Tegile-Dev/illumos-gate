@@ -22,6 +22,7 @@
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2013, Joyent Inc. All rights reserved.
+ * Copyright (c) 2015 by Delphix. All rights reserved.
  */
 
 /*
@@ -3479,8 +3480,7 @@ out:
 	zonecfg_free_rctl_value_list(rctltab.zone_rctl_valptr);
 	if (error && nvl_packed != NULL)
 		free(nvl_packed);
-	if (nvl != NULL)
-		nvlist_free(nvl);
+	nvlist_free(nvl);
 	if (nvlv != NULL)
 		free(nvlv);
 	if (handle != NULL)
@@ -4292,7 +4292,8 @@ remove_mlps(zlog_t *zlogp, zoneid_t zoneid)
 }
 
 int
-prtmount(const struct mnttab *fs, void *x) {
+prtmount(const struct mnttab *fs, void *x)
+{
 	zerror((zlog_t *)x, B_FALSE, "  %s", fs->mnt_mountp);
 	return (0);
 }

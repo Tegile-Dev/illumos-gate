@@ -323,7 +323,7 @@ smb_kshare_init(smb_server_t *sv)
 int
 smb_kshare_start(smb_server_t *sv)
 {
-	smb_thread_init(&sv->sv_export.e_unexport_thread, "smb_thread_unexport",
+	smb_thread_init(&sv->sv_export.e_unexport_thread, "smb_kshare_unexport",
 	    smb_kshare_unexport_thread, sv, smbsrv_base_pri);
 
 	return (smb_thread_start(&sv->sv_export.e_unexport_thread));
@@ -428,8 +428,7 @@ smb_kshare_export_list(smb_ioc_share_t *ioc)
 	rc = 0;
 
 out:
-	if (shrlist != NULL)
-		nvlist_free(shrlist);
+	nvlist_free(shrlist);
 	smb_server_release(sv);
 	return (rc);
 }
@@ -490,8 +489,7 @@ smb_kshare_unexport_list(smb_ioc_share_t *ioc)
 	rc = 0;
 
 out:
-	if (shrlist != NULL)
-		nvlist_free(shrlist);
+	nvlist_free(shrlist);
 	smb_server_release(sv);
 	return (rc);
 }

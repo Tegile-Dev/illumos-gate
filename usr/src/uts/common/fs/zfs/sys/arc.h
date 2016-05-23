@@ -20,7 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2012, 2016 by Delphix. All rights reserved.
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  */
 
@@ -64,41 +64,30 @@ typedef enum arc_flags
 	ARC_FLAG_CACHED			= 1 << 4,	/* I/O was in cache */
 	ARC_FLAG_L2CACHE		= 1 << 5,	/* cache in L2ARC */
 	ARC_FLAG_L2COMPRESS		= 1 << 6,	/* compress in L2ARC */
+	ARC_FLAG_PREDICTIVE_PREFETCH	= 1 << 7,	/* I/O from zfetch */
 
 	/*
 	 * Private ARC flags.  These flags are private ARC only flags that
 	 * will show up in b_flags in the arc_hdr_buf_t. These flags should
 	 * only be set by ARC code.
 	 */
-	ARC_FLAG_IN_HASH_TABLE		= 1 << 7,	/* buffer is hashed */
-	ARC_FLAG_IO_IN_PROGRESS		= 1 << 8,	/* I/O in progress */
-	ARC_FLAG_IO_ERROR		= 1 << 9,	/* I/O failed for buf */
-	ARC_FLAG_FREED_IN_READ		= 1 << 10,	/* freed during read */
-	ARC_FLAG_BUF_AVAILABLE		= 1 << 11,	/* block not in use */
-	ARC_FLAG_INDIRECT		= 1 << 12,	/* indirect block */
-	ARC_FLAG_L2_WRITING		= 1 << 13,	/* write in progress */
-	ARC_FLAG_L2_EVICTED		= 1 << 14,	/* evicted during I/O */
-	ARC_FLAG_L2_WRITE_HEAD		= 1 << 15,	/* head of write list */
+	ARC_FLAG_IN_HASH_TABLE		= 1 << 8,	/* buffer is hashed */
+	ARC_FLAG_IO_IN_PROGRESS		= 1 << 9,	/* I/O in progress */
+	ARC_FLAG_IO_ERROR		= 1 << 10,	/* I/O failed for buf */
+	ARC_FLAG_FREED_IN_READ		= 1 << 11,	/* freed during read */
+	ARC_FLAG_BUF_AVAILABLE		= 1 << 12,	/* block not in use */
+	ARC_FLAG_INDIRECT		= 1 << 13,	/* indirect block */
+	/* Indicates that block was read with ASYNC priority. */
+	ARC_FLAG_PRIO_ASYNC_READ	= 1 << 14,
+	ARC_FLAG_L2_WRITING		= 1 << 15,	/* write in progress */
+	ARC_FLAG_L2_EVICTED		= 1 << 16,	/* evicted during I/O */
+	ARC_FLAG_L2_WRITE_HEAD		= 1 << 17,	/* head of write list */
 	/* indicates that the buffer contains metadata (otherwise, data) */
-	ARC_FLAG_BUFC_METADATA		= 1 << 16,
+	ARC_FLAG_BUFC_METADATA		= 1 << 18,
 
 	/* Flags specifying whether optional hdr struct fields are defined */
-	ARC_FLAG_HAS_L1HDR		= 1 << 17,
-	ARC_FLAG_HAS_L2HDR		= 1 << 18,
-
-	/*
-	 * The arc buffer's compression mode is stored in the top 7 bits of the
-	 * flags field, so these dummy flags are included so that MDB can
-	 * interpret the enum properly.
-	 */
-	ARC_FLAG_COMPRESS_0		= 1 << 24,
-	ARC_FLAG_COMPRESS_1		= 1 << 25,
-	ARC_FLAG_COMPRESS_2		= 1 << 26,
-	ARC_FLAG_COMPRESS_3		= 1 << 27,
-	ARC_FLAG_COMPRESS_4		= 1 << 28,
-	ARC_FLAG_COMPRESS_5		= 1 << 29,
-	ARC_FLAG_COMPRESS_6		= 1 << 30
-
+	ARC_FLAG_HAS_L1HDR		= 1 << 19,
+	ARC_FLAG_HAS_L2HDR		= 1 << 20,
 } arc_flags_t;
 
 struct arc_buf {
@@ -152,9 +141,11 @@ int arc_read(zio_t *pio, spa_t *spa, const blkptr_t *bp,
     arc_flags_t *arc_flags, const zbookmark_phys_t *zb);
 zio_t *arc_write(zio_t *pio, spa_t *spa, uint64_t txg,
     blkptr_t *bp, arc_buf_t *buf, boolean_t l2arc, boolean_t l2arc_compress,
-    const zio_prop_t *zp, arc_done_func_t *ready, arc_done_func_t *physdone,
-    arc_done_func_t *done, void *private, zio_priority_t priority,
-    int zio_flags, const zbookmark_phys_t *zb);
+    const zio_prop_t *zp,
+    arc_done_func_t *ready, arc_done_func_t *child_ready,
+    arc_done_func_t *physdone, arc_done_func_t *done,
+    void *private, zio_priority_t priority, int zio_flags,
+    const zbookmark_phys_t *zb);
 void arc_freed(spa_t *spa, const blkptr_t *bp);
 
 void arc_set_callback(arc_buf_t *buf, arc_evict_func_t *func, void *private);

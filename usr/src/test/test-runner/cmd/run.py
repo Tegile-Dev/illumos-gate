@@ -12,12 +12,13 @@
 #
 
 #
-# Copyright (c) 2013 by Delphix. All rights reserved.
+# Copyright (c) 2012, 2015 by Delphix. All rights reserved.
 #
 
 import ConfigParser
 import os
 import logging
+from logging.handlers import WatchedFileHandler
 from datetime import datetime
 from optparse import OptionParser
 from pwd import getpwnam
@@ -35,6 +36,32 @@ KILL = '/usr/bin/kill'
 TRUE = '/usr/bin/true'
 SUDO = '/usr/bin/sudo'
 
+# Custom class to reopen the log file in case it is forcibly closed by a test.
+class WatchedFileHandlerClosed(WatchedFileHandler):
+    """Watch files, including closed files.
+    Similar to (and inherits from) logging.handler.WatchedFileHandler,
+    except that IOErrors are handled by reopening the stream and retrying.
+    This will be retried up to a configurable number of times before
+    giving up, default 5.
+    """
+
+    def __init__(self, filename, mode='a', encoding=None, delay=0, max_tries=5):
+        self.max_tries = max_tries
+        self.tries = 0
+        WatchedFileHandler.__init__(self, filename, mode, encoding, delay)
+
+    def emit(self, record):
+        while True:
+            try:
+                WatchedFileHandler.emit(self, record)
+                self.tries = 0
+                return
+            except IOError as err:
+                if self.tries == self.max_tries:
+                    raise
+                self.stream.close()
+                self.stream = self._open()
+                self.tries += 1
 
 class Result(object):
     total = 0
@@ -250,8 +277,10 @@ class Cmd(object):
         else:
             logger.debug('%s%s%s' % (msga, pad, msgb))
 
-        lines = self.result.stdout + self.result.stderr
-        for dt, line in sorted(lines):
+        lines = sorted(self.result.stdout + self.result.stderr,
+                       cmp=lambda x, y: cmp(x[0], y[0]))
+
+        for dt, line in lines:
             logger.debug('%s %s' % (dt.strftime("%H:%M:%S.%f ")[:11], line))
 
         if len(self.result.stdout):
@@ -264,7 +293,7 @@ class Cmd(object):
                     os.write(err.fileno(), '%s\n' % line)
         if len(self.result.stdout) and len(self.result.stderr):
             with open(os.path.join(self.outputdir, 'merged'), 'w') as merged:
-                for _, line in sorted(lines):
+                for _, line in lines:
                     os.write(merged.fileno(), '%s\n' % line)
 
 
@@ -637,7 +666,7 @@ class TestRun(object):
                 fail('%s' % e)
             filename = os.path.join(self.outputdir, 'log')
 
-            logfile = logging.FileHandler(filename)
+            logfile = WatchedFileHandlerClosed(filename)
             logfile.setLevel(logging.DEBUG)
             logfilefmt = logging.Formatter('%(message)s')
             logfile.setFormatter(logfilefmt)

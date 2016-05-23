@@ -12,7 +12,8 @@
 #
 # Copyright 2011, Richard Lowe
 # Copyright (c) 2012, Joyent, Inc.  All rights reserved.
-# Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
+# Copyright 2015 Nexenta Systems, Inc.  All rights reserved.
+# Copyright 2016 Toomas Soome <tsoome@me.com>
 #
 
 include		$(SRC)//Makefile.master
@@ -53,11 +54,6 @@ _MANFILES=	6to4relay.1m		\
 		bootadm.1m		\
 		bootconfchk.1m		\
 		busstat.1m		\
-		cachefsd.1m		\
-		cachefslog.1m		\
-		cachefspack.1m		\
-		cachefsstat.1m		\
-		cachefswssize.1m	\
 		captoinfo.1m		\
 		catman.1m		\
 		cfgadm.1m		\
@@ -71,7 +67,6 @@ _MANFILES=	6to4relay.1m		\
 		cfgadm_scsi.1m		\
 		cfgadm_sysctrl.1m	\
 		cfgadm_usb.1m		\
-		cfsadmin.1m		\
 		chat.1m			\
 		check-hostname.1m	\
 		check-permissions.1m	\
@@ -141,7 +136,6 @@ _MANFILES=	6to4relay.1m		\
 		format.1m		\
 		fruadm.1m		\
 		fsck.1m			\
-		fsck_cachefs.1m		\
 		fsck_pcfs.1m		\
 		fsck_udfs.1m		\
 		fsck_ufs.1m		\
@@ -293,6 +287,7 @@ _MANFILES=	6to4relay.1m		\
 		makedbm.1m		\
 		makemap.1m		\
 		mdmonitord.1m		\
+		mdnsd.1m		\
 		medstat.1m		\
 		metaclear.1m		\
 		metadb.1m		\
@@ -325,7 +320,6 @@ _MANFILES=	6to4relay.1m		\
 		modload.1m		\
 		modunload.1m		\
 		mount.1m		\
-		mount_cachefs.1m	\
 		mount_hsfs.1m		\
 		mount_nfs.1m		\
 		mount_pcfs.1m		\
@@ -343,6 +337,7 @@ _MANFILES=	6to4relay.1m		\
 		ncheck.1m		\
 		ncheck_ufs.1m		\
 		ndd.1m			\
+		ndp.1m			\
 		ndmpadm.1m		\
 		ndmpd.1m		\
 		ndmpstat.1m		\
@@ -463,7 +458,7 @@ _MANFILES=	6to4relay.1m		\
 		sdpadm.1m		\
 		sendmail.1m		\
 		setuname.1m		\
-		sftp-server.1m		\
+		sftp-server.sunssh.1m	\
 		share.1m		\
 		share_nfs.1m		\
 		shareall.1m		\
@@ -488,8 +483,8 @@ _MANFILES=	6to4relay.1m		\
 		soconfig.1m		\
 		sppptun.1m		\
 		spray.1m		\
-		ssh-keysign.1m		\
-		sshd.1m			\
+		ssh-keysign.sunssh.1m	\
+		sshd.sunssh.1m		\
 		statd.1m		\
 		stmfadm.1m		\
 		stmsboot.1m		\
@@ -651,6 +646,9 @@ MANLINKS=	acctcon1.1m			\
 		sa1.1m				\
 		sa2.1m				\
 		sadc.1m				\
+		sftp-server.1m			\
+		ssh-keysign.1m			\
+		sshd.1m				\
 		shutacct.1m			\
 		sprayd.1m			\
 		startup.1m			\
@@ -724,6 +722,10 @@ hal-find-by-property.1m		:= LINKSRC = hal-find.1m
 hal-set-property.1m		:= LINKSRC = hal-get-property.1m
 
 poweroff.1m			:= LINKSRC = halt.1m
+
+sftp-server.1m			:= LINKSRC = sftp-server.sunssh.1m
+ssh-keysign.1m			:= LINKSRC = ssh-keysign.sunssh.1m
+sshd.1m				:= LINKSRC = sshd.sunssh.1m
 
 comsat.1m			:= LINKSRC = in.comsat.1m
 fingerd.1m			:= LINKSRC = in.fingerd.1m

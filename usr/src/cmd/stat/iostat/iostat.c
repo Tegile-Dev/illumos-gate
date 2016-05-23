@@ -28,6 +28,8 @@
  */
 /*
  * Copyright (c) 2012 by Delphix. All rights reserved.
+ * Copyright 2015 Nexenta Systems, Inc. All rights reserved.
+ * Copyright 2016 James S. Blachly, MD. All rights reserved.
  */
 
 #include <stdio.h>
@@ -1015,18 +1017,28 @@ show_disk_errors(void *v1, void *v2, void *d)
 
 		switch (knp[i].data_type) {
 			case KSTAT_DATA_CHAR:
+			case KSTAT_DATA_STRING:
 				if ((strcmp(knp[i].name, "Serial No") == 0) &&
 				    do_devid) {
 					if (disk->is_devid) {
 						push_out("Device Id: %s ",
 						    disk->is_devid);
 						col += strlen(disk->is_devid);
-					} else
+					} else {
 						push_out("Device Id: ");
-				} else {
+					}
+
+					break;
+				}
+				if (knp[i].data_type == KSTAT_DATA_CHAR) {
 					push_out("%s: %-.16s ", knp[i].name,
 					    &knp[i].value.c[0]);
-					col += strlen(&knp[i].value.c[0]);
+					col += strnlen(&knp[i].value.c[0], 16);
+				} else {
+					push_out("%s: %s ", knp[i].name,
+					    KSTAT_NAMED_STR_PTR(&knp[i]));
+					col +=
+					    KSTAT_NAMED_STR_BUFLEN(&knp[i]) - 1;
 				}
 				break;
 			case KSTAT_DATA_ULONG:
@@ -1036,11 +1048,13 @@ show_disk_errors(void *v1, void *v2, void *d)
 				break;
 			case KSTAT_DATA_ULONGLONG:
 				if (strcmp(knp[i].name, "Size") == 0) {
-					push_out("%s: %2.2fGB <%llu bytes>\n",
+					do_newline();
+					push_out("%s: %2.2fGB <%llu bytes>",
 					    knp[i].name,
 					    (float)knp[i].value.ui64 /
 					    DISK_GIGABYTE,
 					    knp[i].value.ui64);
+					do_newline();
 					col = 0;
 					break;
 				}
@@ -1257,7 +1271,7 @@ do_args(int argc, char **argv)
 void
 do_format(void)
 {
-	char	header[SMALL_SCRATCH_BUFLEN];
+	char	header[SMALL_SCRATCH_BUFLEN] = {0};
 	char 	ch;
 	char 	iosz;
 	const char    *fstr;
@@ -1270,8 +1284,7 @@ do_format(void)
 			(void) sprintf(header, "s/w h/w trn tot ");
 		} else
 			(void) sprintf(header, "s/w,h/w,trn,tot");
-	} else
-		*header = NULL;
+	}
 	switch (do_disk & DISK_IO_MASK) {
 		case DISK_OLD:
 			if (do_raw == 0)
@@ -1308,8 +1321,15 @@ do_format(void)
 					    sizeof (disk_header),
 					    "device,r/%c,w/%c,%cr/%c,%cw/%c,"
 					    "wait,actv,svc_t,%%%%w,"
-					    "%%%%b,%s",
-					    ch, ch, iosz, ch, iosz, ch, header);
+					    "%%%%b%s%s",
+					    ch, ch, iosz, ch, iosz, ch,
+					    *header == '\0' ? "" : ",",
+					    header);
+					/*
+					 * if no -e flag, header == '\0...'
+					 * Ternary operator above is to prevent
+					 * trailing comma in full disk_header
+					 */
 				}
 			} else {
 				/* with -n option */
@@ -1321,6 +1341,18 @@ do_format(void)
 					fstr = "r/%c,w/%c,%cr/%c,%cw/%c,"
 					    "wait,actv,wsvc_t,asvc_t,"
 					    "%%%%w,%%%%b,%sdevice";
+					/*
+					 * if -rnxe, "tot" (from -e) and
+					 * "device" are run together
+					 * due to lack of trailing comma
+					 * in 'header'. However, adding
+					 * trailing comma to header at
+					 * its definition leads to prob-
+					 * lems elsewhere so it's added
+					 * here in this edge case -rnxe
+					 */
+					if (*header != '\0')
+						(void) strcat(header, ",");
 				}
 				(void) snprintf(disk_header,
 				    sizeof (disk_header),

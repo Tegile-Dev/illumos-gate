@@ -17,6 +17,7 @@
 file path=usr/share/man/man5/audit_binfile.5
 file path=usr/share/man/man5/audit_remote.5
 file path=usr/share/man/man5/audit_syslog.5
+file path=usr/share/man/man5/byteorder.5
 file path=usr/share/man/man5/cancellation.5
 file path=usr/share/man/man5/charmap.5
 file path=usr/share/man/man5/condition.5
@@ -27,6 +28,7 @@ file path=usr/share/man/man5/crypt_sha512.5
 file path=usr/share/man/man5/crypt_sunmd5.5
 file path=usr/share/man/man5/crypt_unix.5
 file path=usr/share/man/man5/environ.5
+file path=usr/share/man/man5/eventfd.5
 file path=usr/share/man/man5/extendedFILE.5
 file path=usr/share/man/man5/fnmatch.5
 file path=usr/share/man/man5/isalist.5
@@ -60,8 +62,10 @@ file path=usr/share/man/man5/pkcs11_softtoken.5
 file path=usr/share/man/man5/pkcs11_tpm.5
 file path=usr/share/man/man5/regex.5
 file path=usr/share/man/man5/regexp.5
+file path=usr/share/man/man5/timerfd.5
 file path=usr/share/man/man5/threads.5
 link path=usr/share/man/man5/advance.5 target=regexp.5
 link path=usr/share/man/man5/compile.5 target=regexp.5
+link path=usr/share/man/man5/endian.5 target=byteorder.5
 link path=usr/share/man/man5/pthreads.5 target=threads.5
 link path=usr/share/man/man5/step.5 target=regexp.5

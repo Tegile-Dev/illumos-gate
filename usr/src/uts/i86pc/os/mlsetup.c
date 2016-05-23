@@ -60,6 +60,7 @@
 #include <sys/archsystm.h>
 #include <sys/promif.h>
 #include <sys/pci_cfgspace.h>
+#include <sys/bootvfs.h>
 #ifdef __xpv
 #include <sys/hypervisor.h>
 #else
@@ -268,7 +269,10 @@ mlsetup(struct regs *rp)
 		(void) wrmsr(MSR_AMD_TSCAUX, 0);
 
 	/*
-	 * Let's get the other %cr4 stuff while we're here.
+	 * Let's get the other %cr4 stuff while we're here. Note, we defer
+	 * enabling CR4_SMAP until startup_end(); however, that's importantly
+	 * before we start other CPUs. That ensures that it will be synced out
+	 * to other CPUs.
 	 */
 	if (is_x86_feature(x86_featureset, X86FSET_DE))
 		setcr4(getcr4() | CR4_DE);
@@ -478,6 +482,10 @@ mach_modpath(char *path, const char *filename)
 	char *p;
 	const char isastr[] = "/amd64";
 	size_t isalen = strlen(isastr);
+
+	len = strlen(SYSTEM_BOOT_PATH "/kernel");
+	(void) strcpy(path, SYSTEM_BOOT_PATH "/kernel ");
+	path += len + 1;
 
 	if ((p = strrchr(filename, '/')) == NULL)
 		return;

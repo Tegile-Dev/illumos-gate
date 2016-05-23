@@ -24,6 +24,7 @@
  * Portions Copyright 2011 iXsystems, Inc
  * Copyright (c) 2013 by Delphix. All rights reserved.
  * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
+ * Copyright (c) 2014 Integros [integros.com]
  */
 
 #include <sys/zfs_context.h>
@@ -547,10 +548,9 @@ sa_find_sizes(sa_os_t *sa, sa_bulk_attr_t *attr_desc, int attr_count,
 {
 	int var_size = 0;
 	int i;
-	int j = -1;
 	int full_space;
 	int hdrsize;
-	boolean_t done = B_FALSE;
+	int extra_hdrsize;
 
 	if (buftype == SA_BONUS && sa->sa_force_spill) {
 		*total = 0;
@@ -561,10 +561,9 @@ sa_find_sizes(sa_os_t *sa, sa_bulk_attr_t *attr_desc, int attr_count,
 
 	*index = -1;
 	*total = 0;
+	*will_spill = B_FALSE;
 
-	if (buftype == SA_BONUS)
-		*will_spill = B_FALSE;
-
+	extra_hdrsize = 0;
 	hdrsize = (SA_BONUSTYPE_FROM_DB(db) == DMU_OT_ZNODE) ? 0 :
 	    sizeof (sa_hdr_phys_t);
 
@@ -576,8 +575,8 @@ sa_find_sizes(sa_os_t *sa, sa_bulk_attr_t *attr_desc, int attr_count,
 
 		*total = P2ROUNDUP(*total, 8);
 		*total += attr_desc[i].sa_length;
-		if (done)
-			goto next;
+		if (*will_spill)
+			continue;
 
 		is_var_sz = (SA_REGISTERED_LEN(sa, attr_desc[i].sa_attr) == 0);
 		if (is_var_sz) {
@@ -585,21 +584,28 @@ sa_find_sizes(sa_os_t *sa, sa_bulk_attr_t *attr_desc, int attr_count,
 		}
 
 		if (is_var_sz && var_size > 1) {
-			if (P2ROUNDUP(hdrsize + sizeof (uint16_t), 8) +
+			/*
+			 * Don't worry that the spill block might overflow.
+			 * It will be resized if needed in sa_build_layouts().
+			 */
+			if (buftype == SA_SPILL ||
+			    P2ROUNDUP(hdrsize + sizeof (uint16_t), 8) +
 			    *total < full_space) {
 				/*
 				 * Account for header space used by array of
 				 * optional sizes of variable-length attributes.
-				 * Record the index in case this increase needs
-				 * to be reversed due to spill-over.
+				 * Record the extra header size in case this
+				 * increase needs to be reversed due to
+				 * spill-over.
 				 */
 				hdrsize += sizeof (uint16_t);
-				j = i;
+				if (*index != -1)
+					extra_hdrsize += sizeof (uint16_t);
 			} else {
-				done = B_TRUE;
-				*index = i;
-				if (buftype == SA_BONUS)
-					*will_spill = B_TRUE;
+				ASSERT(buftype == SA_BONUS);
+				if (*index == -1)
+					*index = i;
+				*will_spill = B_TRUE;
 				continue;
 			}
 		}
@@ -614,22 +620,15 @@ sa_find_sizes(sa_os_t *sa, sa_bulk_attr_t *attr_desc, int attr_count,
 		    *total + P2ROUNDUP(hdrsize, 8) >
 		    (full_space - sizeof (blkptr_t))) {
 			*index = i;
-			done = B_TRUE;
 		}
 
-next:
 		if (*total + P2ROUNDUP(hdrsize, 8) > full_space &&
 		    buftype == SA_BONUS)
 			*will_spill = B_TRUE;
 	}
 
-	/*
-	 * j holds the index of the last variable-sized attribute for
-	 * which hdrsize was increased.  Reverse the increase if that
-	 * attribute will be relocated to the spill block.
-	 */
-	if (*will_spill && j == *index)
-		hdrsize -= sizeof (uint16_t);
+	if (*will_spill)
+		hdrsize -= extra_hdrsize;
 
 	hdrsize = P2ROUNDUP(hdrsize, 8);
 	return (hdrsize);
@@ -1630,8 +1629,11 @@ sa_replace_all_by_template(sa_handle_t *hdl, sa_bulk_attr_t *attr_desc,
 }
 
 /*
- * add/remove/replace a single attribute and then rewrite the entire set
+ * Add/remove a single attribute or replace a variable-sized attribute value
+ * with a value of a different size, and then rewrite the entire set
  * of attributes.
+ * Same-length attribute value replacement (including fixed-length attributes)
+ * is handled more efficiently by the upper layers.
  */
 static int
 sa_modify_attrs(sa_handle_t *hdl, sa_attr_type_t newattr,
@@ -1648,7 +1650,7 @@ sa_modify_attrs(sa_handle_t *hdl, sa_attr_type_t newattr,
 	int spill_data_size = 0;
 	int spill_attr_count = 0;
 	int error;
-	uint16_t length;
+	uint16_t length, reg_length;
 	int i, j, k, length_idx;
 	sa_hdr_phys_t *hdr;
 	sa_idx_tab_t *idx_tab;
@@ -1708,26 +1710,45 @@ sa_modify_attrs(sa_handle_t *hdl, sa_attr_type_t newattr,
 	hdr = SA_GET_HDR(hdl, SA_BONUS);
 	idx_tab = SA_IDX_TAB_GET(hdl, SA_BONUS);
 	for (; k != 2; k++) {
-		/* iterate over each attribute in layout */
+		/*
+		 * Iterate over each attribute in layout.  Fetch the
+		 * size of variable-length attributes needing rewrite
+		 * from sa_lengths[].
+		 */
 		for (i = 0, length_idx = 0; i != count; i++) {
 			sa_attr_type_t attr;
 
 			attr = idx_tab->sa_layout->lot_attrs[i];
+			reg_length = SA_REGISTERED_LEN(sa, attr);
+			if (reg_length == 0) {
+				length = hdr->sa_lengths[length_idx];
+				length_idx++;
+			} else {
+				length = reg_length;
+			}
 			if (attr == newattr) {
-				if (action == SA_REMOVE) {
-					j++;
+				/*
+				 * There is nothing to do for SA_REMOVE,
+				 * so it is just skipped.
+				 */
+				if (action == SA_REMOVE)
 					continue;
-				}
-				ASSERT(SA_REGISTERED_LEN(sa, attr) == 0);
-				ASSERT(action == SA_REPLACE);
+
+				/*
+				 * Duplicate attributes are not allowed, so the
+				 * action can not be SA_ADD here.
+				 */
+				ASSERT3S(action, ==, SA_REPLACE);
+
+				/*
+				 * Only a variable-sized attribute can be
+				 * replaced here, and its size must be changing.
+				 */
+				ASSERT3U(reg_length, ==, 0);
+				ASSERT3U(length, !=, buflen);
 				SA_ADD_BULK_ATTR(attr_desc, j, attr,
 				    locator, datastart, buflen);
 			} else {
-				length = SA_REGISTERED_LEN(sa, attr);
-				if (length == 0) {
-					length = hdr->sa_lengths[length_idx++];
-				}
-
 				SA_ADD_BULK_ATTR(attr_desc, j, attr,
 				    NULL, (void *)
 				    (TOC_OFF(idx_tab->sa_idx_tab[attr]) +
@@ -1743,13 +1764,12 @@ sa_modify_attrs(sa_handle_t *hdl, sa_attr_type_t newattr,
 		}
 	}
 	if (action == SA_ADD) {
-		length = SA_REGISTERED_LEN(sa, newattr);
-		if (length == 0) {
-			length = buflen;
-		}
+		reg_length = SA_REGISTERED_LEN(sa, newattr);
+		IMPLY(reg_length != 0, reg_length == buflen);
 		SA_ADD_BULK_ATTR(attr_desc, j, newattr, locator,
 		    datastart, buflen);
 	}
+	ASSERT3U(j, ==, attr_count);
 
 	error = sa_build_layouts(hdl, attr_desc, attr_count, tx);
 

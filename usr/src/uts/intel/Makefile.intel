@@ -19,8 +19,10 @@
 #
 
 # Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2014 Nexenta Systems, Inc. All rights reserved.
+# Copyright (c) 2015 Nexenta Systems, Inc. All rights reserved.
 # Copyright (c) 2013 Andrew Stormont.  All rights reserved.
+# Copyright (c) 2015, Joyent, Inc.  All rights reserved.
+# Copyright 2016 Garrett D'Amore <garrett@damore.org>
 
 #
 #	This makefile contains the common definitions for all intel
@@ -128,6 +130,7 @@ CFLAGS			+= $(SPACEFLAG)
 CFLAGS			+= $(CCUNBOUND)
 CFLAGS			+= $(CFLAGS_uts)
 CFLAGS			+= -xstrconst
+CFLAGS			+= -_gcc=-fstack-protector
 
 ASFLAGS_XARCH_32	= $(i386_ASFLAGS)
 ASFLAGS_XARCH_64	= $(amd64_ASFLAGS)
@@ -238,6 +241,7 @@ DRV_KMODS_32	+= dnet
 DRV_KMODS	+= dump
 DRV_KMODS	+= ecpp
 DRV_KMODS	+= emlxs
+DRV_KMODS	+= eventfd
 DRV_KMODS	+= fd
 DRV_KMODS	+= fdc
 DRV_KMODS	+= fm
@@ -284,6 +288,7 @@ DRV_KMODS	+= nca
 DRV_KMODS	+= nsmb
 DRV_KMODS	+= nulldriver
 DRV_KMODS	+= nv_sata
+DRV_KMODS	+= nvme
 DRV_KMODS	+= nxge
 DRV_KMODS	+= oce
 DRV_KMODS	+= openeepr
@@ -320,6 +325,7 @@ DRV_KMODS	+= sd
 DRV_KMODS	+= sdhost
 DRV_KMODS	+= sgen
 DRV_KMODS	+= si3124
+DRV_KMODS	+= signalfd
 DRV_KMODS	+= smbios
 DRV_KMODS	+= skd
 DRV_KMODS	+= softmac
@@ -335,6 +341,7 @@ DRV_KMODS	+= sysevent
 DRV_KMODS	+= sysmsg
 DRV_KMODS	+= tcp
 DRV_KMODS	+= tcp6
+DRV_KMODS	+= timerfd
 DRV_KMODS	+= tl
 DRV_KMODS	+= tnf
 DRV_KMODS	+= tpm
@@ -367,8 +374,9 @@ DRV_KMODS	+= qlt
 DRV_KMODS	+= iscsit
 DRV_KMODS	+= pppt
 DRV_KMODS	+= ncall nsctl sdbc nskern sv
-DRV_KMODS	+= ii rdc rdcsrv rdcstub 
+DRV_KMODS	+= ii rdc rdcsrv rdcstub
 DRV_KMODS	+= iptun
+DRV_KMODS	+= vmxnet3s
 
 #
 # Common code drivers
@@ -389,6 +397,7 @@ DRV_KMODS	+= pcn
 DRV_KMODS	+= rge
 DRV_KMODS	+= rtls
 DRV_KMODS	+= sfe
+DRV_KMODS	+= sfxge
 DRV_KMODS	+= amd8111s
 DRV_KMODS	+= igb
 DRV_KMODS	+= ipmi
@@ -405,6 +414,9 @@ DRV_KMODS	+= virtio
 
 # Virtio block driver
 DRV_KMODS	+= vioblk
+
+# Virtio network driver
+DRV_KMODS	+= vioif
 
 #
 #	DTrace and DTrace Providers
@@ -515,10 +527,10 @@ SCHED_KMODS	+= IA RT TS RT_DPTBL TS_DPTBL FSS FX FX_DPTBL SDC
 #
 #	File System Modules (/kernel/fs):
 #
-FS_KMODS	+= autofs cachefs ctfs dcfs dev devfs fdfs fifofs hsfs lofs
+FS_KMODS	+= autofs ctfs dcfs dev devfs fdfs fifofs hsfs lofs
 FS_KMODS	+= mntfs namefs nfs objfs zfs zut
 FS_KMODS	+= pcfs procfs sockfs specfs tmpfs udfs ufs sharefs
-FS_KMODS	+= smbfs
+FS_KMODS	+= smbfs bootfs
 
 #
 #	Streams Modules (/kernel/strmod):
@@ -646,11 +658,13 @@ CRYPTO_KMODS	+= arcfour
 CRYPTO_KMODS	+= blowfish
 CRYPTO_KMODS	+= des
 CRYPTO_KMODS	+= ecc
+CRYPTO_KMODS	+= edonr
 CRYPTO_KMODS	+= md4
 CRYPTO_KMODS	+= md5
 CRYPTO_KMODS	+= rsa
 CRYPTO_KMODS	+= sha1
 CRYPTO_KMODS	+= sha2
+CRYPTO_KMODS	+= skein
 CRYPTO_KMODS	+= swrand
 
 #

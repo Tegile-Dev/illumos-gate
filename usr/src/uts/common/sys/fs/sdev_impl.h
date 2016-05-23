@@ -20,6 +20,7 @@
  */
 /*
  * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2015 Joyent, Inc.  All rights reserved.
  */
 
 #ifndef _SYS_SDEV_IMPL_H
@@ -35,6 +36,7 @@ extern "C" {
 #include <sys/vfs_opreg.h>
 #include <sys/list.h>
 #include <sys/nvpair.h>
+#include <sys/sunddi.h>
 
 /*
  * sdev_nodes are the file-system specific part of the
@@ -330,13 +332,13 @@ typedef enum {
 extern volatile uint_t  devfsadm_state; /* atomic mask for devfsadm status */
 
 #define	DEVNAME_DEVFSADM_SET_RUNNING(devfsadm_state)	\
-	devfsadm_state = DEVNAME_DEVFSADM_RUNNING
+	(devfsadm_state = DEVNAME_DEVFSADM_RUNNING)
 #define	DEVNAME_DEVFSADM_SET_STOP(devfsadm_state)	\
-	devfsadm_state = DEVNAME_DEVFSADM_STOPPED
+	(devfsadm_state = DEVNAME_DEVFSADM_STOPPED)
 #define	DEVNAME_DEVFSADM_SET_RUN(devfsadm_state)	\
-	devfsadm_state = DEVNAME_DEVFSADM_RUN
+	(devfsadm_state = DEVNAME_DEVFSADM_RUN)
 #define	DEVNAME_DEVFSADM_IS_RUNNING(devfsadm_state)	\
-	devfsadm_state == DEVNAME_DEVFSADM_RUNNING
+	(devfsadm_state == DEVNAME_DEVFSADM_RUNNING)
 #define	DEVNAME_DEVFSADM_HAS_RUN(devfsadm_state)	\
 	(devfsadm_state == DEVNAME_DEVFSADM_RUN)
 
@@ -540,6 +542,8 @@ extern int		sdev_reconfig_disable;
 extern int		sdev_nc_disable;
 extern int		sdev_nc_disable_reset;
 extern int		sdev_nc_verbose;
+
+extern taskq_t		*sdev_taskq;
 
 /*
  * misc. defines
