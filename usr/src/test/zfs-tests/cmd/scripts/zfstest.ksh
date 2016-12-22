@@ -12,15 +12,22 @@
 #
 
 #
-# Copyright (c) 2012, 2015 by Delphix. All rights reserved.
+# Copyright (c) 2012, 2016 by Delphix. All rights reserved.
 # Copyright 2014, OmniTI Computer Consulting, Inc. All rights reserved.
 # Copyright 2016 Nexenta Systems, Inc.
 #
 
+export PATH="/usr/bin"
+export NOINUSE_CHECK=1
 export STF_SUITE="/opt/zfs-tests"
 export STF_TOOLS="/opt/test-runner/stf"
+export PATHDIR=""
 runner="/opt/test-runner/bin/run"
 auto_detect=false
+
+if [[ -z "$TESTFAIL_CALLBACKS" ]] ; then
+	export TESTFAIL_CALLBACKS="$STF_SUITE/callbacks/zfs_dbgmsg.ksh"
+fi
 
 function fail
 {
@@ -30,9 +37,9 @@ function fail
 
 function find_disks
 {
-	typeset all_disks=$(echo '' | sudo -k /usr/sbin/format | awk \
+	typeset all_disks=$(echo '' | sudo -k format | awk \
 	    '/c[0-9]/ {print $2}')
-	typeset used_disks=$(/sbin/zpool status | awk \
+	typeset used_disks=$(zpool status | awk \
 	    '/c[0-9]*t[0-9a-f]*d[0-9]/ {print $1}' | sed 's/s[0-9]//g')
 
 	typeset disk used avail_disks
@@ -49,7 +56,7 @@ function find_disks
 
 function find_rpool
 {
-	typeset ds=$(/usr/sbin/mount | awk '/^\/ / {print $3}')
+	typeset ds=$(mount | awk '/^\/ / {print $3}')
 	echo ${ds%%/*}
 }
 
@@ -79,14 +86,46 @@ function verify_disks
 {
 	typeset disk
 	for disk in $DISKS; do
-		sudo -k /usr/sbin/prtvtoc /dev/rdsk/${disk}s0 >/dev/null 2>&1
+		sudo -k prtvtoc /dev/rdsk/${disk}s0 >/dev/null 2>&1
 		[[ $? -eq 0 ]] || return 1
 	done
 	return 0
 }
 
-verify_id
+function create_links
+{
+	typeset dir=$1
+	typeset file_list=$2
 
+	[[ -n $PATHDIR ]] || fail "PATHDIR wasn't correctly set"
+
+	for i in $file_list; do
+		[[ ! -e $PATHDIR/$i ]] || fail "$i already exists"
+		ln -s $dir/$i $PATHDIR/$i || fail "Couldn't link $i"
+	done
+
+}
+
+function constrain_path
+{
+	. $STF_SUITE/include/commands.cfg
+
+	PATHDIR=$(/usr/bin/mktemp -d /var/tmp/constrained_path.XXXX)
+	chmod 755 $PATHDIR || fail "Couldn't chmod $PATHDIR"
+
+	create_links "/usr/bin" "$USR_BIN_FILES"
+	create_links "/usr/sbin" "$USR_SBIN_FILES"
+	create_links "/sbin" "$SBIN_FILES"
+	create_links "/opt/zfs-tests/bin" "$ZFSTEST_FILES"
+
+	# Special case links
+	ln -s /usr/gnu/bin/dd $PATHDIR/gnu_dd
+}
+
+constrain_path
+export PATH=$PATHDIR
+
+verify_id
 while getopts ac:q c; do
 	case $c in
 	'a')
@@ -132,6 +171,9 @@ num_disks=$(echo $DISKS | awk '{print NF}')
 [[ $num_disks -lt 3 ]] && fail "Not enough disks to run ZFS Test Suite"
 
 # Ensure user has only basic privileges.
-/usr/bin/ppriv -s EIP=basic -e $runner $quiet -c $runfile
+ppriv -s EIP=basic -e $runner $quiet -c $runfile
+ret=$?
 
-exit $?
+rm -rf $PATHDIR || fail "Couldn't remove $PATHDIR"
+
+exit $ret

@@ -24,6 +24,8 @@
 # Copyright 2012 OmniTI Computer Consulting, Inc.  All rights reserved.
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
 # Copyright 2014 Nexenta Systems, Inc.  All rights reserved.
+# Copyright 2016 Toomas Soome <tsoome@me.com>
+# Copyright 2016 Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
 #
 
 #
@@ -47,6 +49,10 @@ usr/include/security/pam_impl.h
 usr/include/sys/clock_impl.h
 usr/include/sys/winlockio.h
 usr/include/scsi/plugins/ses/vendor/sun_impl.h
+#
+# Private lofi interface.
+#
+usr/include/sys/lofi_impl.h
 #
 # Private/Internal libraries of the Cryptographic Framework.
 #
@@ -348,6 +354,7 @@ usr/platform/sun4u/include/sys/fcode.h				sparc
 #
 # Private net80211 headers
 #
+usr/include/sys/net80211_amrr.h
 usr/include/sys/net80211_crypto.h
 usr/include/sys/net80211_ht.h
 usr/include/sys/net80211_proto.h
@@ -984,3 +991,14 @@ usr/lib/llib-lpcidb.ln
 # debugging program for libadutils
 #
 usr/bin/test-getdc
+#
+# libficl-sys is private
+#
+usr/include/ficllocal.h
+usr/lib/amd64/llib-lficl-sys.ln		i386
+usr/lib/amd64/libficl-sys.so		i386
+usr/lib/sparcv9/llib-lficl-sys.ln	sparc
+usr/lib/sparcv9/libficl-sys.so		sparc
+usr/lib/llib-lficl-sys
+usr/lib/llib-lficl-sys.ln
+usr/lib/libficl-sys.so

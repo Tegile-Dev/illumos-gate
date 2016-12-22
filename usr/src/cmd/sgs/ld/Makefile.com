@@ -21,6 +21,7 @@
 
 #
 # Copyright (c) 1994, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright 2016 RackTop Systems.
 #
 
 PROG =		ld
@@ -49,9 +50,10 @@ LINTFLAGS64 +=	-x $(VAR_LINTFLAGS64)
 
 CLEANFILES +=	$(LINTOUTS)
 
-native :=	LDFLAGS = -R$(SGSPROTO) $(ZNOVERSION)
-native :=	LDLIBS = -L$(SGSPROTO) $(LD_LIB) -lelf $(CONVLIBDIR) \
+native :=	LDFLAGS = -R$(SGSLIBDIR) $(ZNOVERSION)
+native :=	LDLIBS = -L$(SGSLIBDIR) $(LD_LIB) -lelf $(CONVLIBDIR) \
 		    $(CONV_LIB)
+native :=	CPPFLAGS += -DNATIVE_BUILD
 
 BLTDEFS=	msg.h
 BLTDATA=	msg.c

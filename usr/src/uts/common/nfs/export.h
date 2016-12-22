@@ -22,6 +22,7 @@
 /*
  * Copyright 2016 Nexenta Systems, Inc.  All rights reserved.
  * Copyright (c) 1989, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2016 Jason King.
  */
 
 /*	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T	*/
@@ -185,8 +186,9 @@ struct exportdata32 {
 #endif /* VOLATILE_FH_TEST */
 
 #define	EX_CHARMAP	0x1000	/* NFS may need a character set conversion */
-#define	EX_NOACLFAB	0x2000	/* If set, NFSv2 and v3 servers doesn't */
-				/* fabricate ACL for VOP_GETSECATTR OTW call */
+#define	EX_NOACLFAB	0x2000	/* If set, NFSv2 and v3 servers won't */
+				/* fabricate an aclent_t ACL on file systems */
+				/* that don't support aclent_t ACLs */
 
 #ifdef	_KERNEL
 
@@ -527,9 +529,6 @@ struct exportinfo {
 	struct ex_vol_rename	*exi_vol_rename;
 	kmutex_t		exi_vol_rename_lock;
 #endif /* VOLATILE_FH_TEST */
-	int			exi_id;
-	avl_node_t		exi_id_link;
-	struct exp_kstats	*exi_kstats;
 };
 
 typedef struct exportinfo exportinfo_t;
@@ -542,7 +541,7 @@ typedef struct secinfo secinfo_t;
  * a real export at the mount point (VROOT) which has a subtree shared
  * has a visible list.
  *
- * The exi_visible field is NULL for normal, non=pseudo filesystems
+ * The exi_visible field is NULL for normal, non-pseudo filesystems
  * which do not have any subtree exported. If the field is non-null,
  * it points to a list of visible entries, identified by vis_fid and/or
  * vis_ino. The presence of a "visible" list means that if this export
@@ -571,6 +570,7 @@ struct exp_visible {
 	struct exp_visible	*vis_next;
 	struct secinfo		*vis_secinfo;
 	int			vis_seccnt;
+	timespec_t		vis_change;
 };
 typedef struct exp_visible exp_visible_t;
 
@@ -638,7 +638,8 @@ extern exportinfo_t *vis2exi(treenode_t *);
 extern int	treeclimb_export(struct exportinfo *);
 extern void	treeclimb_unexport(struct exportinfo *);
 extern int	nfs_visible(struct exportinfo *, vnode_t *, int *);
-extern int	nfs_visible_inode(struct exportinfo *, ino64_t, int *);
+extern int	nfs_visible_inode(struct exportinfo *, ino64_t,
+    struct exp_visible **);
 extern int	has_visible(struct exportinfo *, vnode_t *);
 extern void	free_visible(struct exp_visible *);
 extern int	nfs_exported(struct exportinfo *, vnode_t *);
@@ -646,6 +647,9 @@ extern struct exportinfo *pseudo_exportfs(vnode_t *, fid_t *,
     struct exp_visible *, struct exportdata *);
 extern int	vop_fid_pseudo(vnode_t *, fid_t *);
 extern int	nfs4_vget_pseudo(struct exportinfo *, vnode_t **, fid_t *);
+extern bool_t	nfs_visible_change(struct exportinfo *, vnode_t *,
+    timespec_t *);
+extern void	tree_update_change(treenode_t *, timespec_t *);
 /*
  * Functions that handle the NFSv4 server namespace security flavors
  * information.
@@ -660,12 +664,6 @@ extern struct exportinfo *exi_public, *exi_root;
 extern fhandle_t nullfh2;	/* for comparing V2 filehandles */
 extern krwlock_t exported_lock;
 extern struct exportinfo *exptable[];
-
-/*
- * exi_id support
- */
-extern avl_tree_t exi_id_tree;
-extern int exi_id_get_next(void);
 
 /*
  * Two macros for identifying public filehandles.

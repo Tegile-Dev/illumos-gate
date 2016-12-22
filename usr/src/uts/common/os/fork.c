@@ -125,13 +125,36 @@ forksys(int subcode, int flags)
 	}
 }
 
+/*
+ * Remove the associations of a child process from its parent and siblings.
+ */
+static void
+disown_proc(proc_t *pp, proc_t *cp)
+{
+	proc_t **orphpp;
+
+	ASSERT(MUTEX_HELD(&pidlock));
+
+	orphpp = &pp->p_orphan;
+	while (*orphpp != cp)
+		orphpp = &(*orphpp)->p_nextorph;
+	*orphpp = cp->p_nextorph;
+
+	if (pp->p_child == cp)
+		pp->p_child = cp->p_sibling;
+	if (cp->p_sibling)
+		cp->p_sibling->p_psibling = cp->p_psibling;
+	if (cp->p_psibling)
+		cp->p_psibling->p_sibling = cp->p_sibling;
+}
+
 /* ARGSUSED */
 static int64_t
 cfork(int isvfork, int isfork1, int flags)
 {
 	proc_t *p = ttoproc(curthread);
 	struct as *as;
-	proc_t *cp, **orphpp;
+	proc_t *cp;
 	klwp_t *clone;
 	kthread_t *t;
 	task_t *tk;
@@ -266,16 +289,7 @@ cfork(int isvfork, int isfork1, int flags)
 			sprunlock(p);
 			fork_fail(cp);
 			mutex_enter(&pidlock);
-			orphpp = &p->p_orphan;
-			while (*orphpp != cp)
-				orphpp = &(*orphpp)->p_nextorph;
-			*orphpp = cp->p_nextorph;
-			if (p->p_child == cp)
-				p->p_child = cp->p_sibling;
-			if (cp->p_sibling)
-				cp->p_sibling->p_psibling = cp->p_psibling;
-			if (cp->p_psibling)
-				cp->p_psibling->p_sibling = cp->p_sibling;
+			disown_proc(p, cp);
 			mutex_enter(&cp->p_lock);
 			tk = cp->p_task;
 			task_detach(cp);
@@ -627,6 +641,10 @@ forklwperr:
 
 	forklwp_fail(cp);
 	fork_fail(cp);
+	if (cp->p_dtrace_helpers != NULL) {
+		ASSERT(dtrace_helpers_cleanup != NULL);
+		(*dtrace_helpers_cleanup)(cp);
+	}
 	rctl_set_free(cp->p_rctls);
 	mutex_enter(&pidlock);
 
@@ -640,16 +658,7 @@ forklwperr:
 	atomic_dec_32(&cp->p_pool->pool_ref);
 	mutex_exit(&cp->p_lock);
 
-	orphpp = &p->p_orphan;
-	while (*orphpp != cp)
-		orphpp = &(*orphpp)->p_nextorph;
-	*orphpp = cp->p_nextorph;
-	if (p->p_child == cp)
-		p->p_child = cp->p_sibling;
-	if (cp->p_sibling)
-		cp->p_sibling->p_psibling = cp->p_psibling;
-	if (cp->p_psibling)
-		cp->p_psibling->p_sibling = cp->p_sibling;
+	disown_proc(p, cp);
 	pid_exit(cp, tk);
 	mutex_exit(&pidlock);
 
@@ -886,18 +895,21 @@ newproc(void (*pc)(), caddr_t arg, id_t cid, int pri, struct contract **ct,
 		if ((lwp = lwp_create(pc, arg, 0, p, TS_STOPPED, pri,
 		    &curthread->t_hold, cid, 1)) == NULL) {
 			task_t *tk;
+
 			fork_fail(p);
 			mutex_enter(&pidlock);
+			disown_proc(p->p_parent, p);
+
 			mutex_enter(&p->p_lock);
 			tk = p->p_task;
 			task_detach(p);
 			ASSERT(p->p_pool->pool_ref > 0);
 			atomic_add_32(&p->p_pool->pool_ref, -1);
 			mutex_exit(&p->p_lock);
+
 			pid_exit(p, tk);
 			mutex_exit(&pidlock);
 			task_rele(tk);
-
 			return (EAGAIN);
 		}
 		t = lwptot(lwp);
@@ -1087,6 +1099,11 @@ getproc(proc_t **cpp, pid_t pid, uint_t flags)
 	cp->p_ppid = pp->p_pid;
 	cp->p_ancpid = pp->p_pid;
 	cp->p_portcnt = pp->p_portcnt;
+	/*
+	 * Security flags are preserved on fork, the inherited copy come into
+	 * effect on exec
+	 */
+	cp->p_secflags = pp->p_secflags;
 
 	/*
 	 * Initialize watchpoint structures

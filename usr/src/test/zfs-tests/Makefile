@@ -10,11 +10,11 @@
 #
 
 #
-# Copyright (c) 2012 by Delphix. All rights reserved.
+# Copyright (c) 2012, 2016 by Delphix. All rights reserved.
 #
 
 .PARALLEL: $(SUBDIRS)
 
-SUBDIRS = cmd include runfiles tests doc
+SUBDIRS = cmd include runfiles tests doc callbacks
 
 include $(SRC)/test/Makefile.com

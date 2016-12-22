@@ -24,6 +24,7 @@
 # Copyright (c) 2013 Gary Mills
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
 # Copyright 2015 Nexenta Systems, Inc. All rights reserved.
+# Copyright 2016 Toomas Soome <tsoome@me.com>
 #
 
 <include SUNWcs.man1.inc>
@@ -435,10 +436,8 @@ file path=etc/security/prof_attr group=sys preserve=true \
     timestamp=19700101T000000Z
 file path=etc/security/prof_attr.d/SUNWcs group=sys
 file path=etc/shadow group=sys mode=0400 preserve=true
+file path=etc/skel/.kshrc group=other preserve=true
 file path=etc/skel/.profile group=other preserve=true
-file path=etc/skel/local.cshrc group=sys preserve=true
-file path=etc/skel/local.login group=sys preserve=true
-file path=etc/skel/local.profile group=sys preserve=true
 file path=etc/svc/profile/generic_limited_net.xml group=sys mode=0444
 file path=etc/svc/profile/generic_open.xml group=sys mode=0444
 file path=etc/svc/profile/inetd_generic.xml group=sys mode=0444
@@ -552,6 +551,7 @@ file path=lib/svc/manifest/system/logadm-upgrade.xml group=sys mode=0444
 file path=lib/svc/manifest/system/manifest-import.xml group=sys mode=0444
 file path=lib/svc/manifest/system/name-service-cache.xml group=sys mode=0444
 file path=lib/svc/manifest/system/pfexecd.xml group=sys mode=0444
+file path=lib/svc/manifest/system/process-security.xml group=sys mode=0444
 file path=lib/svc/manifest/system/rbac.xml group=sys mode=0444
 file path=lib/svc/manifest/system/rmtmpfiles.xml group=sys mode=0444
 file path=lib/svc/manifest/system/sac.xml group=sys mode=0444
@@ -1084,6 +1084,7 @@ file path=usr/lib/help/auths/locale/C/SmfValueMDNS.html
 file path=usr/lib/help/auths/locale/C/SmfValueNADD.html
 file path=usr/lib/help/auths/locale/C/SmfValueNDMP.html
 file path=usr/lib/help/auths/locale/C/SmfValueNWAM.html
+file path=usr/lib/help/auths/locale/C/SmfValueProcSec.html
 file path=usr/lib/help/auths/locale/C/SmfValueRouting.html
 file path=usr/lib/help/auths/locale/C/SmfValueSMB.html
 file path=usr/lib/help/auths/locale/C/SmfValueVscan.html
@@ -1325,6 +1326,7 @@ file path=usr/sbin/getmajor group=sys mode=0755
 file path=usr/sbin/groupadd group=sys mode=0555
 file path=usr/sbin/groupdel group=sys mode=0555
 file path=usr/sbin/groupmod group=sys mode=0555
+file path=usr/sbin/growfs mode=0555
 file path=usr/sbin/grpck mode=0555
 file path=usr/sbin/halt mode=0755
 file path=usr/sbin/hotplug mode=0555
@@ -1839,6 +1841,10 @@ depend fmri=runtime/perl$(PERL_PKGVERS) type=require
 # intrd uses sun-solaris Perl modules
 #
 depend fmri=runtime/perl$(PERL_PKGVERS)/module/sun-solaris type=require
+#
+# The boot loader package
+#
+depend fmri=system/boot/loader type=require
 #
 # The loadkeys binary needs the keytables.
 #

@@ -72,21 +72,6 @@ treenode_t *ns_root;
 struct exportinfo *exptable_path_hash[PKP_HASH_SIZE];
 struct exportinfo *exptable[EXPTABLESIZE];
 
-/*
- * exi_id support
- *
- * exi_id_next		The next exi_id available.
- * exi_id_overflow	The exi_id_next already overflowed, so we should
- *			thoroughly check for duplicates.
- * exi_id_tree		AVL tree indexed by exi_id.
- *
- * All exi_id_next, exi_id_overflow, and exi_id_tree are protected by
- * exported_lock.
- */
-static int exi_id_next;
-static bool_t exi_id_overflow;
-avl_tree_t exi_id_tree;
-
 static int	unexport(exportinfo_t *);
 static void	exportfree(exportinfo_t *);
 static int	loadindex(exportdata_t *);
@@ -98,7 +83,7 @@ extern void	sec_svc_freerootnames(int, int, caddr_t *);
 static int build_seclist_nodups(exportdata_t *, secinfo_t *, int);
 static void srv_secinfo_add(secinfo_t **, int *, secinfo_t *, int, int);
 static void srv_secinfo_remove(secinfo_t **, int *, secinfo_t *, int);
-static void srv_secinfo_treeclimb(exportinfo_t *, secinfo_t *, int, int);
+static void srv_secinfo_treeclimb(exportinfo_t *, secinfo_t *, int, bool_t);
 
 #ifdef VOLATILE_FH_TEST
 static struct ex_vol_rename *find_volrnm_fh(exportinfo_t *, nfs_fh4 *);
@@ -718,12 +703,13 @@ vis2exi(treenode_t *tnode)
  * given exportinfo from its ancestors upto the system root.
  */
 void
-srv_secinfo_treeclimb(exportinfo_t *exip, secinfo_t *sec, int seccnt, int isadd)
+srv_secinfo_treeclimb(exportinfo_t *exip, secinfo_t *sec, int seccnt,
+    bool_t isadd)
 {
 	treenode_t *tnode = exip->exi_tree;
 
 	ASSERT(RW_WRITE_HELD(&exported_lock));
-	ASSERT(tnode);
+	ASSERT(tnode != NULL);
 
 	if (seccnt == 0)
 		return;
@@ -731,7 +717,7 @@ srv_secinfo_treeclimb(exportinfo_t *exip, secinfo_t *sec, int seccnt, int isadd)
 	/*
 	 * If flavors are being added and the new export root isn't
 	 * also VROOT, its implicitly allowed flavors are inherited from
-	 * from its pseudonode.
+	 * its pseudonode.
 	 * Note - for VROOT exports the implicitly allowed flavors were
 	 * transferred from the PSEUDO export in exportfs()
 	 */
@@ -748,10 +734,10 @@ srv_secinfo_treeclimb(exportinfo_t *exip, secinfo_t *sec, int seccnt, int isadd)
 	 */
 	tnode = tnode->tree_parent;
 
-	while (tnode) {
+	while (tnode != NULL) {
 
 		/* If there is exportinfo, update it */
-		if (tnode->tree_exi) {
+		if (tnode->tree_exi != NULL) {
 			secinfo_t **pxsec =
 			    &tnode->tree_exi->exi_export.ex_secinfo;
 			int *pxcnt = &tnode->tree_exi->exi_export.ex_seccnt;
@@ -764,7 +750,7 @@ srv_secinfo_treeclimb(exportinfo_t *exip, secinfo_t *sec, int seccnt, int isadd)
 		}
 
 		/* Update every visible - only root node has no visible */
-		if (tnode->tree_vis) {
+		if (tnode->tree_vis != NULL) {
 			secinfo_t **pxsec = &tnode->tree_vis->vis_secinfo;
 			int *pxcnt = &tnode->tree_vis->vis_seccnt;
 			if (isadd)
@@ -800,56 +786,12 @@ export_link(exportinfo_t *exi)
 {
 	exportinfo_t **bckt;
 
-	ASSERT(RW_WRITE_HELD(&exported_lock));
-
 	bckt = &exptable[exptablehash(&exi->exi_fsid, &exi->exi_fid)];
 	exp_hash_link(exi, fid_hash, bckt);
 
 	bckt = &exptable_path_hash[pkp_tab_hash(exi->exi_export.ex_path,
 	    strlen(exi->exi_export.ex_path))];
 	exp_hash_link(exi, path_hash, bckt);
-}
-
-/*
- * Helper functions for exi_id handling
- */
-static int
-exi_id_compar(const void *v1, const void *v2)
-{
-	const struct exportinfo *e1 = v1;
-	const struct exportinfo *e2 = v2;
-
-	if (e1->exi_id < e2->exi_id)
-		return (-1);
-	if (e1->exi_id > e2->exi_id)
-		return (1);
-
-	return (0);
-}
-
-int
-exi_id_get_next(void)
-{
-	struct exportinfo e;
-	int ret = exi_id_next;
-
-	ASSERT(RW_WRITE_HELD(&exported_lock));
-
-	do {
-		exi_id_next++;
-		if (exi_id_next == 0)
-			exi_id_overflow = TRUE;
-
-		if (!exi_id_overflow)
-			break;
-
-		if (exi_id_next == ret)
-			cmn_err(CE_PANIC, "exi_id exhausted");
-
-		e.exi_id = exi_id_next;
-	} while (avl_find(&exi_id_tree, &e, NULL) != NULL);
-
-	return (ret);
 }
 
 /*
@@ -862,14 +804,6 @@ nfs_exportinit(void)
 	int i;
 
 	rw_init(&exported_lock, NULL, RW_DEFAULT, NULL);
-
-	/*
-	 * exi_id handling initialization
-	 */
-	exi_id_next = 0;
-	exi_id_overflow = FALSE;
-	avl_create(&exi_id_tree, exi_id_compar, sizeof (struct exportinfo),
-	    offsetof(struct exportinfo, exi_id_link));
 
 	/*
 	 * Allocate the place holder for the public file handle, which
@@ -916,23 +850,10 @@ nfs_exportinit(void)
 	    exi_rootfid.fid_len);
 	exi_root->exi_fh.fh_len = sizeof (exi_root->exi_fh.fh_data);
 
-	rw_enter(&exported_lock, RW_WRITER);
-
 	/*
 	 * Publish the exportinfo in the hash table
 	 */
 	export_link(exi_root);
-
-	/*
-	 * Initialize exi_id and exi_kstats
-	 */
-	exi_root->exi_id = exi_id_get_next();
-	avl_add(&exi_id_tree, exi_root);
-	exi_root->exi_kstats = exp_kstats_init(getzoneid(), exi_root->exi_id,
-	    exi_root->exi_export.ex_path, exi_root->exi_export.ex_pathlen,
-	    FALSE);
-
-	rw_exit(&exported_lock);
 
 	nfslog_init();
 	ns_root = NULL;
@@ -949,35 +870,18 @@ nfs_exportfini(void)
 {
 	int i;
 
-	rw_enter(&exported_lock, RW_WRITER);
-
-	exp_kstats_delete(exi_root->exi_kstats);
-	avl_remove(&exi_id_tree, exi_root);
-	export_unlink(exi_root);
-
-	rw_exit(&exported_lock);
-
 	/*
 	 * Deallocate the place holder for the public file handle.
 	 */
 	srv_secinfo_list_free(exi_root->exi_export.ex_secinfo,
 	    exi_root->exi_export.ex_seccnt);
 	mutex_destroy(&exi_root->exi_lock);
-
 	rw_destroy(&exi_root->exi_cache_lock);
 	for (i = 0; i < AUTH_TABLESIZE; i++) {
 		avl_destroy(exi_root->exi_cache[i]);
 		kmem_free(exi_root->exi_cache[i], sizeof (avl_tree_t));
 	}
-
-	exp_kstats_fini(exi_root->exi_kstats);
-
 	kmem_free(exi_root, sizeof (*exi_root));
-
-	/*
-	 * exi_id handling cleanup
-	 */
-	avl_destroy(&exi_id_tree);
 
 	rw_destroy(&exported_lock);
 }
@@ -1569,7 +1473,6 @@ exportfs(struct exportfs_args *args, model_t model, cred_t *cr)
 	 */
 	for (ex = exi->fid_hash.next; ex != NULL; ex = ex->fid_hash.next) {
 		if (ex != exi_root && VN_CMP(ex->exi_vp, vp)) {
-			avl_remove(&exi_id_tree, ex);
 			export_unlink(ex);
 			break;
 		}
@@ -1618,6 +1521,9 @@ exportfs(struct exportfs_args *args, model_t model, cred_t *cr)
 		/* If it's a re-export update namespace tree */
 		exi->exi_tree = ex->exi_tree;
 		exi->exi_tree->tree_exi = exi;
+
+		/* Update the change timestamp */
+		tree_update_change(exi->exi_tree, NULL);
 	}
 
 	/*
@@ -1664,22 +1570,6 @@ exportfs(struct exportfs_args *args, model_t model, cred_t *cr)
 		exi->exi_visible = ex->exi_visible;
 		ex->exi_visible = NULL;
 	}
-
-	/*
-	 * Initialize exi_id and exi_kstats
-	 */
-	if (ex != NULL) {
-		exi->exi_id = ex->exi_id;
-		exi->exi_kstats = ex->exi_kstats;
-		ex->exi_kstats = NULL;
-		exp_kstats_reset(exi->exi_kstats, kex->ex_path,
-		    kex->ex_pathlen, FALSE);
-	} else {
-		exi->exi_id = exi_id_get_next();
-		exi->exi_kstats = exp_kstats_init(getzoneid(), exi->exi_id,
-		    kex->ex_path, kex->ex_pathlen, FALSE);
-	}
-	avl_add(&exi_id_tree, exi);
 
 	DTRACE_PROBE(nfss__i__exported_lock3_stop);
 	rw_exit(&exported_lock);
@@ -1769,8 +1659,6 @@ unexport(struct exportinfo *exi)
 		return (EINVAL);
 	}
 
-	exp_kstats_delete(exi->exi_kstats);
-	avl_remove(&exi_id_tree, exi);
 	export_unlink(exi);
 
 	/*
@@ -1786,7 +1674,7 @@ unexport(struct exportinfo *exi)
 	 * a pseudo export here to retain the visible list
 	 * for paths to exports below.
 	 */
-	if (exi->exi_visible) {
+	if (exi->exi_visible != NULL) {
 		struct exportinfo *newexi;
 
 		newexi = pseudo_exportfs(exi->exi_vp, &exi->exi_fid,
@@ -1796,6 +1684,9 @@ unexport(struct exportinfo *exi)
 		/* interconnect the existing treenode with the new exportinfo */
 		newexi->exi_tree = exi->exi_tree;
 		newexi->exi_tree->tree_exi = newexi;
+
+		/* Update the change timestamp */
+		tree_update_change(exi->exi_tree, NULL);
 	} else {
 		treeclimb_unexport(exi);
 	}
@@ -2009,7 +1900,7 @@ nfs_getfh(struct nfs_getfh_args *args, model_t model, cred_t *cr)
  */
 struct   exportinfo *
 nfs_vptoexi(vnode_t *dvp, vnode_t *vp, cred_t *cr, int *walk,
-	int *err,  bool_t v4srv)
+    int *err, bool_t v4srv)
 {
 	fid_t fid;
 	int error;
@@ -2691,8 +2582,6 @@ exportfree(struct exportinfo *exi)
 		avl_destroy(exi->exi_cache[i]);
 		kmem_free(exi->exi_cache[i], sizeof (avl_tree_t));
 	}
-
-	exp_kstats_fini(exi->exi_kstats);
 
 	kmem_free(exi, sizeof (*exi));
 }

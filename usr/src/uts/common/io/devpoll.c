@@ -353,8 +353,9 @@ repoll:
 					pdp->pd_fp = NULL;
 					pdp->pd_events = 0;
 
-					if (php != NULL) {
-						pollhead_delete(php, pdp);
+					if (pdp->pd_php != NULL) {
+						pollhead_delete(pdp->pd_php,
+						    pdp);
 						pdp->pd_php = NULL;
 					}
 
@@ -503,8 +504,9 @@ repoll:
 					pdp->pd_fp = NULL;
 					pdp->pd_events = 0;
 
-					if (php != NULL) {
-						pollhead_delete(php, pdp);
+					if (pdp->pd_php != NULL) {
+						pollhead_delete(pdp->pd_php,
+						    pdp);
 						pdp->pd_php = NULL;
 					}
 
@@ -639,6 +641,7 @@ dpwrite(dev_t dev, struct uio *uiop, cred_t *credp)
 	uintptr_t	limit;
 	int		error, size;
 	ssize_t		uiosize;
+	size_t		copysize;
 	nfds_t		pollfdnum;
 	struct pollhead	*php = NULL;
 	polldat_t	*pdp;
@@ -670,15 +673,26 @@ dpwrite(dev_t dev, struct uio *uiop, cred_t *credp)
 
 	uiosize = uiop->uio_resid;
 	pollfdnum = uiosize / size;
-	mutex_enter(&curproc->p_lock);
-	if (pollfdnum > (uint_t)rctl_enforced_value(
-	    rctlproc_legacy[RLIMIT_NOFILE], curproc->p_rctls, curproc)) {
-		(void) rctl_action(rctlproc_legacy[RLIMIT_NOFILE],
-		    curproc->p_rctls, curproc, RCA_SAFE);
+
+	/*
+	 * We want to make sure that pollfdnum isn't large enough to DoS us,
+	 * but we also don't want to grab p_lock unnecessarily -- so we
+	 * perform the full check against our resource limits if and only if
+	 * pollfdnum is larger than the known-to-be-sane value of UINT8_MAX.
+	 */
+	if (pollfdnum > UINT8_MAX) {
+		mutex_enter(&curproc->p_lock);
+		if (pollfdnum >
+		    (uint_t)rctl_enforced_value(rctlproc_legacy[RLIMIT_NOFILE],
+		    curproc->p_rctls, curproc)) {
+			(void) rctl_action(rctlproc_legacy[RLIMIT_NOFILE],
+			    curproc->p_rctls, curproc, RCA_SAFE);
+			mutex_exit(&curproc->p_lock);
+			return (EINVAL);
+		}
 		mutex_exit(&curproc->p_lock);
-		return (EINVAL);
 	}
-	mutex_exit(&curproc->p_lock);
+
 	/*
 	 * Copy in the pollfd array.  Walk through the array and add
 	 * each polled fd to the cached set.
@@ -693,11 +707,19 @@ dpwrite(dev_t dev, struct uio *uiop, cred_t *credp)
 	 * here for every call.
 	 */
 	uiop->uio_loffset = 0;
-	if ((error = uiomove((caddr_t)pollfdp, uiosize, UIO_WRITE, uiop))
-	    != 0) {
+
+	/*
+	 * Use uiocopy instead of uiomove when populating pollfdp, keeping
+	 * uio_resid untouched for now.  Write syscalls will translate EINTR
+	 * into a success if they detect "successfully transfered" data via an
+	 * updated uio_resid.  Falsely suppressing such errors is disastrous.
+	 */
+	if ((error = uiocopy((caddr_t)pollfdp, uiosize, UIO_WRITE, uiop,
+	    &copysize)) != 0) {
 		kmem_free(pollfdp, uiosize);
 		return (error);
 	}
+
 	/*
 	 * We are about to enter the core portion of dpwrite(). Make sure this
 	 * write has exclusive access in this portion of the code, i.e., no
@@ -970,6 +992,13 @@ bypass:
 	cv_broadcast(&dpep->dpe_cv);
 	mutex_exit(&dpep->dpe_lock);
 	kmem_free(pollfdp, uiosize);
+	if (error == 0) {
+		/*
+		 * The state of uio_resid is updated only after the pollcache
+		 * is successfully modified.
+		 */
+		uioskip(uiop, copysize);
+	}
 	return (error);
 }
 
@@ -1112,13 +1141,17 @@ dpioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *credp, int *rvalp)
 			void *setp = STRUCT_FGETP(dvpoll, dp_setp);
 
 			if (setp != NULL) {
-				if (copyin(setp, &set, sizeof (set))) {
-					DP_REFRELE(dpep);
-					return (EFAULT);
+				if ((mode & FKIOCTL) != 0) {
+					/* Use the signal set directly */
+					ksetp = (k_sigset_t *)setp;
+				} else {
+					if (copyin(setp, &set, sizeof (set))) {
+						DP_REFRELE(dpep);
+						return (EFAULT);
+					}
+					sigutok(&set, &kset);
+					ksetp = &kset;
 				}
-
-				sigutok(&set, &kset);
-				ksetp = &kset;
 
 				mutex_enter(&p->p_lock);
 				schedctl_finish_sigblock(t);
@@ -1268,6 +1301,10 @@ dpioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *credp, int *rvalp)
 		DP_SIGMASK_RESTORE(ksetp);
 
 		if (error == 0 && fdcnt > 0) {
+			/*
+			 * It should be noted that FKIOCTL does not influence
+			 * the copyout (vs bcopy) of dp_fds at this time.
+			 */
 			if (copyout(ps->ps_dpbuf,
 			    STRUCT_FGETP(dvpoll, dp_fds), fdcnt * fdsize)) {
 				DP_REFRELE(dpep);

@@ -20,6 +20,10 @@
  */
 
 /*
+ * Copyright (c) 2016 STRATO AG. All rights reserved.
+ */
+
+/*
  * Copyright 2015 Nexenta Systems, Inc.  All rights reserved.
  */
 
@@ -2229,7 +2233,6 @@ nfs4_open_non_reg_file(vnode_t **vpp, int flag, cred_t *cr)
 	    (rp->r_dir == NULL && !nfs4_has_pages(*vpp)))
 		return (0);
 
-	gar.n4g_va.va_mask = AT_ALL;
 	return (nfs4_getattr_otw(*vpp, &gar, cr, 0));
 }
 
@@ -2239,7 +2242,7 @@ nfs4_open_non_reg_file(vnode_t **vpp, int flag, cred_t *cr)
 /* ARGSUSED */
 static int
 nfs4_close(vnode_t *vp, int flag, int count, offset_t offset, cred_t *cr,
-	caller_context_t *ct)
+    caller_context_t *ct)
 {
 	rnode4_t	*rp;
 	int		 error = 0;
@@ -2302,6 +2305,8 @@ nfs4_close(vnode_t *vp, int flag, int count, offset_t offset, cred_t *cr,
 		} else {
 			cleanlocks(vp, ttoproc(curthread)->p_pid,
 			    (lm_sysidt(lmsid) | LM_SYSID_CLIENT));
+
+			lm_rel_sysid(lmsid);
 		}
 		return (e.error);
 	}
@@ -2573,10 +2578,20 @@ nfs4close_otw(rnode4_t *rp, cred_t *cred_otw, nfs4_open_owner_t *oop,
 	ASSERT(osp->os_ref_count >= 2);
 	osp->os_ref_count--;
 
-	if (!ep->error)
+	if (ep->error == 0) {
+		/*
+		 * Avoid a deadlock with the r_serial thread waiting for
+		 * os_sync_lock in nfs4_get_otw_cred_by_osp() which might be
+		 * held by us. We will wait in nfs4_attr_cache() for the
+		 * completion of the r_serial thread.
+		 */
+		mutex_exit(&osp->os_sync_lock);
+		*have_sync_lockp = 0;
+
 		nfs4_attr_cache(vp,
 		    &res.array[1].nfs_resop4_u.opgetattr.ga_res,
 		    t, cred_otw, TRUE, NULL);
+	}
 
 	NFS4_DEBUG(nfs4_client_state_debug, (CE_NOTE, "nfs4close_otw:"
 	    " returning %d", ep->error));
@@ -3616,7 +3631,7 @@ recov_retry:
 /* ARGSUSED */
 static int
 nfs4_ioctl(vnode_t *vp, int cmd, intptr_t arg, int flag, cred_t *cr, int *rvalp,
-	caller_context_t *ct)
+    caller_context_t *ct)
 {
 	if (nfs_zone() != VTOMI4(vp)->mi_zone)
 		return (EIO);
@@ -6511,8 +6526,8 @@ recov_retry:
 /* ARGSUSED */
 static int
 nfs4_create(vnode_t *dvp, char *nm, struct vattr *va, enum vcexcl exclusive,
-	int mode, vnode_t **vpp, cred_t *cr, int flags, caller_context_t *ct,
-	vsecattr_t *vsecp)
+    int mode, vnode_t **vpp, cred_t *cr, int flags, caller_context_t *ct,
+    vsecattr_t *vsecp)
 {
 	int error;
 	vnode_t *vp = NULL;
@@ -8901,7 +8916,7 @@ nfs4_symlink(vnode_t *dvp, char *lnm, struct vattr *tva, char *tnm, cred_t *cr,
 /* ARGSUSED */
 static int
 nfs4_readdir(vnode_t *vp, struct uio *uiop, cred_t *cr, int *eofp,
-	caller_context_t *ct, int flags)
+    caller_context_t *ct, int flags)
 {
 	int error;
 	uint_t count;
@@ -9728,7 +9743,7 @@ nfs4_seek(vnode_t *vp, offset_t ooff, offset_t *noffp, caller_context_t *ct)
 static int
 nfs4_getpage(vnode_t *vp, offset_t off, size_t len, uint_t *protp,
     page_t *pl[], size_t plsz, struct seg *seg, caddr_t addr,
-	enum seg_rw rw, cred_t *cr, caller_context_t *ct)
+    enum seg_rw rw, cred_t *cr, caller_context_t *ct)
 {
 	rnode4_t *rp;
 	int error;
@@ -10199,7 +10214,7 @@ nfs4_readahead(vnode_t *vp, u_offset_t blkoff, caddr_t addr, struct seg *seg,
 /* ARGSUSED */
 static int
 nfs4_putpage(vnode_t *vp, offset_t off, size_t len, int flags, cred_t *cr,
-	caller_context_t *ct)
+    caller_context_t *ct)
 {
 	int error;
 	rnode4_t *rp;
@@ -11321,7 +11336,7 @@ nfs4_have_xattrs(vnode_t *vp, ulong_t *valp, cred_t *cr)
 /* ARGSUSED */
 int
 nfs4_pathconf(vnode_t *vp, int cmd, ulong_t *valp, cred_t *cr,
-	caller_context_t *ct)
+    caller_context_t *ct)
 {
 	int error;
 	hrtime_t t;
@@ -11475,7 +11490,7 @@ nfs4_sync_pageio(vnode_t *vp, page_t *pp, u_offset_t io_off, size_t io_len,
 /* ARGSUSED */
 static int
 nfs4_pageio(vnode_t *vp, page_t *pp, u_offset_t io_off, size_t io_len,
-	int flags, cred_t *cr, caller_context_t *ct)
+    int flags, cred_t *cr, caller_context_t *ct)
 {
 	int error;
 	rnode4_t *rp;
@@ -11506,7 +11521,7 @@ nfs4_pageio(vnode_t *vp, page_t *pp, u_offset_t io_off, size_t io_len,
 /* ARGSUSED */
 static void
 nfs4_dispose(vnode_t *vp, page_t *pp, int fl, int dn, cred_t *cr,
-	caller_context_t *ct)
+    caller_context_t *ct)
 {
 	int error;
 	rnode4_t *rp;
@@ -12259,7 +12274,7 @@ do_nfs4_async_commit(vnode_t *vp, page_t *plist, offset3 offset, count3 count,
 /*ARGSUSED*/
 static int
 nfs4_setsecattr(vnode_t *vp, vsecattr_t *vsecattr, int flag, cred_t *cr,
-	caller_context_t *ct)
+    caller_context_t *ct)
 {
 	int		error = 0;
 	mntinfo4_t	*mi;
@@ -12308,7 +12323,7 @@ nfs4_setsecattr(vnode_t *vp, vsecattr_t *vsecattr, int flag, cred_t *cr,
 /* ARGSUSED */
 int
 nfs4_getsecattr(vnode_t *vp, vsecattr_t *vsecattr, int flag, cred_t *cr,
-	caller_context_t *ct)
+    caller_context_t *ct)
 {
 	int		error;
 	mntinfo4_t	*mi;
@@ -12360,9 +12375,8 @@ nfs4_getsecattr(vnode_t *vp, vsecattr_t *vsecattr, int flag, cred_t *cr,
 		/*
 		 * The getattr otw call will always get both the acl, in
 		 * the form of a list of nfsace4's, and the number of acl
-		 * entries; independent of the value of gar.n4g_vsa.vsa_mask.
+		 * entries; independent of the value of gar.n4g_va.va_mask.
 		 */
-		gar.n4g_va.va_mask = AT_ALL;
 		error =  nfs4_getattr_otw(vp, &gar, cr, 1);
 		if (error) {
 			vs_ace4_destroy(&gar.n4g_vsa);

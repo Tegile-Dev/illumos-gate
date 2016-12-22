@@ -25,6 +25,7 @@
 # Copyright 2013 Saso Kiselkov. All rights reserved.
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
 # Copyright 2016 Nexenta Systems, Inc.
+# Copyright 2016 Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
 #
 
 set name=pkg.fmri value=pkg:/system/header@$(PKGVERS)
@@ -354,6 +355,7 @@ file path=usr/include/deflt.h
 file path=usr/include/des/des.h
 file path=usr/include/des/desdata.h
 file path=usr/include/des/softdes.h
+file path=usr/include/devfsadm.h
 file path=usr/include/device_info.h
 file path=usr/include/devid.h
 file path=usr/include/devmgmt.h
@@ -996,6 +998,7 @@ file path=usr/include/sys/feature_tests.h
 file path=usr/include/sys/fem.h
 file path=usr/include/sys/file.h
 file path=usr/include/sys/filio.h
+file path=usr/include/sys/firmload.h
 file path=usr/include/sys/flock.h
 file path=usr/include/sys/flock_impl.h
 $(sparc_ONLY)file path=usr/include/sys/fm/cpu/SPARC64-VI.h
@@ -1071,6 +1074,7 @@ file path=usr/include/sys/ftrace.h
 file path=usr/include/sys/fx.h
 file path=usr/include/sys/fxpriocntl.h
 file path=usr/include/sys/gfs.h
+file path=usr/include/sys/gfx_private.h
 file path=usr/include/sys/gld.h
 file path=usr/include/sys/gldpriv.h
 file path=usr/include/sys/group.h
@@ -1415,6 +1419,7 @@ file path=usr/include/sys/scsi/targets/sgendef.h
 file path=usr/include/sys/scsi/targets/smp.h
 $(sparc_ONLY)file path=usr/include/sys/scsi/targets/ssddef.h
 file path=usr/include/sys/scsi/targets/stdef.h
+file path=usr/include/sys/secflags.h
 $(i386_ONLY)file path=usr/include/sys/segment.h
 $(i386_ONLY)file path=usr/include/sys/segments.h
 file path=usr/include/sys/select.h
@@ -1980,6 +1985,8 @@ license lic_CDDL license=lic_CDDL
 license license_in_headers license=license_in_headers
 license usr/src/lib/pkcs11/include/THIRDPARTYLICENSE \
     license=usr/src/lib/pkcs11/include/THIRDPARTYLICENSE
+license usr/src/uts/common/sys/THIRDPARTYLICENSE.firmload \
+    license=usr/src/uts/common/sys/THIRDPARTYLICENSE.firmload
 link path=usr/include/iso/assert_iso.h target=../assert.h
 link path=usr/include/iso/errno_iso.h target=../errno.h
 link path=usr/include/iso/float_iso.h target=../float.h

@@ -24,6 +24,7 @@ OBJS=		ClientCommon.o dns-sd.o
 SRCS=		ClientCommon.c dns-sd.c
 
 CFLAGS += $(C99_ENABLE)
+CPPFLAGS += -DMDNS_VERSIONSTR_NODTS
 LDLIBS += -lsocket -ldns_sd
 
 .KEEP_STATE:
@@ -36,12 +37,11 @@ $(PROG): $(OBJS)
 	$(LINK.c) $(OBJS) -o $@ $(LDLIBS)
 	$(POST_PROCESS)
 
-install: all $(ROOTPROG) 
+install: all $(ROOTPROG)
 
 clean:
 	$(RM) $(OBJS)
 
-lint:	lint_SRCS
+lint:  lint_SRCS
 
 include ../../../Makefile.targ
-

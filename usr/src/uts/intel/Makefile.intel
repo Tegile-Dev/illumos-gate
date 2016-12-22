@@ -266,6 +266,7 @@ DRV_KMODS	+= ipsecesp
 DRV_KMODS	+= ipw
 DRV_KMODS	+= iwh
 DRV_KMODS	+= iwi
+DRV_KMODS	+= iwn
 DRV_KMODS	+= iwk
 DRV_KMODS	+= iwp
 DRV_KMODS	+= iwscn
@@ -491,6 +492,15 @@ DRV_KMODS	+= usbskel
 DRV_KMODS	+= usbvc
 DRV_KMODS	+= usbftdi
 DRV_KMODS	+= usbecm
+
+#
+#	USBGEM modules
+#
+DRV_KMODS	+= usbgem
+DRV_KMODS	+= axf
+DRV_KMODS	+= udmf 
+DRV_KMODS	+= upf
+DRV_KMODS	+= urf 
 
 #
 #	1394 modules

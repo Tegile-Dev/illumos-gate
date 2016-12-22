@@ -11,8 +11,9 @@
 
 #
 # Copyright 2011, Richard Lowe
-# Copyright 2012 Nexenta Systems, Inc. All rights reserved.
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
+# Copyright 2016 Nexenta Systems, Inc.
+# Copyright 2016 Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
 #
 
 file path=usr/share/man/man9f/ASSERT.9f
@@ -240,6 +241,7 @@ file path=usr/share/man/man9f/ddi_umem_alloc.9f
 file path=usr/share/man/man9f/ddi_umem_iosetup.9f
 file path=usr/share/man/man9f/ddi_umem_lock.9f
 file path=usr/share/man/man9f/delay.9f
+file path=usr/share/man/man9f/devfs_clean.9f
 file path=usr/share/man/man9f/devmap_default_access.9f
 file path=usr/share/man/man9f/devmap_devmem_setup.9f
 file path=usr/share/man/man9f/devmap_do_ctxmgt.9f
@@ -258,6 +260,7 @@ file path=usr/share/man/man9f/dupmsg.9f
 file path=usr/share/man/man9f/enableok.9f
 file path=usr/share/man/man9f/esballoc.9f
 file path=usr/share/man/man9f/esbbcall.9f
+file path=usr/share/man/man9f/firmload.9f
 file path=usr/share/man/man9f/flushband.9f
 file path=usr/share/man/man9f/flushq.9f
 file path=usr/share/man/man9f/freeb.9f
@@ -275,6 +278,7 @@ file path=usr/share/man/man9f/gld.9f
 file path=usr/share/man/man9f/hook_alloc.9f
 file path=usr/share/man/man9f/hook_free.9f
 file path=usr/share/man/man9f/id32_alloc.9f
+file path=usr/share/man/man9f/id_space.9f
 file path=usr/share/man/man9f/inb.9f
 file path=usr/share/man/man9f/insq.9f
 file path=usr/share/man/man9f/kiconv.9f
@@ -314,6 +318,16 @@ file path=usr/share/man/man9f/ldi_remove_event_handler.9f
 file path=usr/share/man/man9f/ldi_strategy.9f
 file path=usr/share/man/man9f/linkb.9f
 file path=usr/share/man/man9f/list_create.9f
+file path=usr/share/man/man9f/mac_alloc.9f
+file path=usr/share/man/man9f/mac_hcksum_get.9f
+file path=usr/share/man/man9f/mac_init_ops.9f
+file path=usr/share/man/man9f/mac_link_update.9f
+file path=usr/share/man/man9f/mac_lso_get.9f
+file path=usr/share/man/man9f/mac_maxsdu_update.9f
+file path=usr/share/man/man9f/mac_prop_info.9f
+file path=usr/share/man/man9f/mac_register.9f
+file path=usr/share/man/man9f/mac_rx.9f
+file path=usr/share/man/man9f/mac_tx_update.9f
 file path=usr/share/man/man9f/makecom.9f
 file path=usr/share/man/man9f/makedevice.9f
 file path=usr/share/man/man9f/max.9f
@@ -389,6 +403,7 @@ file path=usr/share/man/man9f/pm_busy_component.9f
 file path=usr/share/man/man9f/pm_power_has_changed.9f
 file path=usr/share/man/man9f/pm_raise_power.9f
 file path=usr/share/man/man9f/pm_trans_check.9f
+file path=usr/share/man/man9f/pollhead_clean.9f
 file path=usr/share/man/man9f/pollwakeup.9f
 file path=usr/share/man/man9f/priv_getbyname.9f
 file path=usr/share/man/man9f/priv_policy.9f
@@ -894,6 +909,12 @@ link path=usr/share/man/man9f/dlokack.9f target=dlbindack.9f
 link path=usr/share/man/man9f/dlphysaddrack.9f target=dlbindack.9f
 link path=usr/share/man/man9f/dluderrorind.9f target=dlbindack.9f
 link path=usr/share/man/man9f/free_pktiopb.9f target=get_pktiopb.9f
+link path=usr/share/man/man9f/firmware_close.9f target=firmload.9f
+link path=usr/share/man/man9f/firmware_free.9f target=firmload.9f
+link path=usr/share/man/man9f/firmware_get_size.9f target=firmload.9f
+link path=usr/share/man/man9f/firmware_malloc.9f target=firmload.9f
+link path=usr/share/man/man9f/firmware_open.9f target=firmload.9f
+link path=usr/share/man/man9f/firmware_read.9f target=firmload.9f
 link path=usr/share/man/man9f/gld_intr.9f target=gld.9f
 link path=usr/share/man/man9f/gld_mac_alloc.9f target=gld.9f
 link path=usr/share/man/man9f/gld_mac_free.9f target=gld.9f
@@ -903,6 +924,15 @@ link path=usr/share/man/man9f/gld_sched.9f target=gld.9f
 link path=usr/share/man/man9f/gld_unregister.9f target=gld.9f
 link path=usr/share/man/man9f/id32_free.9f target=id32_alloc.9f
 link path=usr/share/man/man9f/id32_lookup.9f target=id32_alloc.9f
+link path=usr/share/man/man9f/id_alloc.9f target=id_space.9f
+link path=usr/share/man/man9f/id_alloc_nosleep.9f target=id_space.9f
+link path=usr/share/man/man9f/id_alloc_specific_nosleep.9f target=id_space.9f
+link path=usr/share/man/man9f/id_allocff.9f target=id_space.9f
+link path=usr/share/man/man9f/id_allocff_nosleep.9f target=id_space.9f
+link path=usr/share/man/man9f/id_free.9f target=id_space.9f
+link path=usr/share/man/man9f/id_space_create.9f target=id_space.9f
+link path=usr/share/man/man9f/id_space_destroy.9f target=id_space.9f
+link path=usr/share/man/man9f/id_space_extend.9f target=id_space.9f
 link path=usr/share/man/man9f/inl.9f target=inb.9f
 link path=usr/share/man/man9f/intro.9f target=Intro.9f
 link path=usr/share/man/man9f/inw.9f target=inb.9f
@@ -963,6 +993,24 @@ link path=usr/share/man/man9f/list_remove.9f target=list_create.9f
 link path=usr/share/man/man9f/list_remove_head.9f target=list_create.9f
 link path=usr/share/man/man9f/list_remove_tail.9f target=list_create.9f
 link path=usr/share/man/man9f/list_tail.9f target=list_create.9f
+link path=usr/share/man/man9f/mac_fini_ops.9f target=mac_init_ops.9f
+link path=usr/share/man/man9f/mac_free.9f target=mac_alloc.9f
+link path=usr/share/man/man9f/mac_hcksum_set.9f target=mac_hcksum_get.9f
+link path=usr/share/man/man9f/mac_prop_info_set_default_link_flowctrl.9f \
+    target=mac_prop_info.9f
+link path=usr/share/man/man9f/mac_prop_info_set_default_str.9f \
+    target=mac_prop_info.9f
+link path=usr/share/man/man9f/mac_prop_info_set_default_uint32.9f \
+    target=mac_prop_info.9f
+link path=usr/share/man/man9f/mac_prop_info_set_default_uint64.9f \
+    target=mac_prop_info.9f
+link path=usr/share/man/man9f/mac_prop_info_set_default_uint8.9f \
+    target=mac_prop_info.9f
+link path=usr/share/man/man9f/mac_prop_info_set_perm.9f \
+    target=mac_prop_info.9f
+link path=usr/share/man/man9f/mac_prop_info_set_range_uint32.9f \
+    target=mac_prop_info.9f
+link path=usr/share/man/man9f/mac_unregister.9f target=mac_register.9f
 link path=usr/share/man/man9f/makecom_g0.9f target=makecom.9f
 link path=usr/share/man/man9f/makecom_g0_s.9f target=makecom.9f
 link path=usr/share/man/man9f/makecom_g1.9f target=makecom.9f

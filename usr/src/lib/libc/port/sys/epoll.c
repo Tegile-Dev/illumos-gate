@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (c) 2014, Joyent, Inc.  All rights reserved.
+ * Copyright 2016 Joyent, Inc.
  */
 
 #include <sys/types.h>
@@ -95,8 +95,15 @@ epoll_create1(int flags)
 {
 	int fd, oflags = O_RDWR;
 
-	if (flags & EPOLL_CLOEXEC)
+	if (flags & EPOLL_CLOEXEC) {
 		oflags |= O_CLOEXEC;
+		flags ^= EPOLL_CLOEXEC;
+	}
+	/* Reject unrecognized flags */
+	if (flags != 0) {
+		errno = EINVAL;
+		return (-1);
+	}
 
 	if ((fd = open("/dev/poll", oflags)) == -1)
 		return (-1);
@@ -114,7 +121,7 @@ epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
 	dvpoll_epollfd_t epoll[2];
 	uint32_t events, ev = 0;
-	int i = 0;
+	int i = 0, res;
 
 	epoll[i].dpep_pollfd.fd = fd;
 
@@ -165,8 +172,29 @@ epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 	}
 
 	epoll[i].dpep_pollfd.events = ev;
+retry:
+	res = write(epfd, epoll, sizeof (epoll[0]) * (i + 1));
 
-	return (write(epfd, epoll, sizeof (epoll[0]) * (i + 1)) == -1 ? -1 : 0);
+	if (res == -1) {
+		if (errno == EINTR) {
+			/*
+			 * Linux does not document EINTR as an allowed error
+			 * for epoll_ctl.  The write must be retried if it is
+			 * not done automatically via SA_RESTART.
+			 */
+			goto retry;
+		}
+		if (errno == ELOOP) {
+			/*
+			 * Convert the specific /dev/poll error about an fd
+			 * loop into what is expected from the Linux epoll
+			 * interface.
+			 */
+			errno = EINVAL;
+		}
+		return (-1);
+	}
+	return (0);
 }
 
 int

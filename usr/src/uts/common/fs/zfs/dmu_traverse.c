@@ -39,6 +39,7 @@
 #include <sys/zfeature.h>
 
 int32_t zfs_pd_bytes_max = 50 * 1024 * 1024;	/* 50MB */
+boolean_t send_holes_without_birth_time = B_TRUE;
 
 typedef struct prefetch_data {
 	kmutex_t pd_mtx;
@@ -253,7 +254,8 @@ traverse_visitbp(traverse_data_t *td, const dnode_phys_t *dnp,
 		 *
 		 * Note that the meta-dnode cannot be reallocated.
 		 */
-		if ((!td->td_realloc_possible ||
+		if (!send_holes_without_birth_time &&
+		    (!td->td_realloc_possible ||
 		    zb->zb_object == DMU_META_DNODE_OBJECT) &&
 		    td->td_hole_birth_enabled_txg <= td->td_min_txg)
 			return (0);
@@ -379,7 +381,7 @@ traverse_visitbp(traverse_data_t *td, const dnode_phys_t *dnp,
 	}
 
 	if (buf)
-		(void) arc_buf_remove_ref(buf, &buf);
+		arc_buf_destroy(buf, &buf);
 
 post:
 	if (err == 0 && (td->td_flags & TRAVERSE_POST))
@@ -594,7 +596,7 @@ traverse_impl(spa_t *spa, dsl_dataset_t *ds, uint64_t objset, blkptr_t *rootbp,
 
 		osp = buf->b_data;
 		traverse_zil(&td, &osp->os_zil_header);
-		(void) arc_buf_remove_ref(buf, &buf);
+		arc_buf_destroy(buf, &buf);
 	}
 
 	if (!(flags & TRAVERSE_PREFETCH_DATA) ||

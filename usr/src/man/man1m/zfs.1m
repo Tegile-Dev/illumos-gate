@@ -21,14 +21,14 @@
 .\"
 .\" Copyright (c) 2009 Sun Microsystems, Inc. All Rights Reserved.
 .\" Copyright 2011 Joshua M. Clulow <josh@sysmgr.org>
-.\" Copyright (c) 2011, 2015 by Delphix. All rights reserved.
+.\" Copyright (c) 2011, 2016 by Delphix. All rights reserved.
 .\" Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
 .\" Copyright (c) 2014, Joyent, Inc. All rights reserved.
 .\" Copyright (c) 2014 by Adam Stevko. All rights reserved.
 .\" Copyright (c) 2014 Integros [integros.com]
 .\" Copyright 2016 Nexenta Systems, Inc.
 .\"
-.Dd March 20, 2016
+.Dd September 16, 2016
 .Dt ZFS 1M
 .Os
 .Sh NAME
@@ -112,7 +112,7 @@
 .Oo Fl s Ar source Ns Oo , Ns Ar source Oc Ns ... Oc
 .Oo Fl t Ar type Ns Oo , Ns Ar type Oc Ns ... Oc
 .Cm all | Ar property Ns Oo , Ns Ar property Oc Ns ...
-.Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot Ns ...
+.Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot Ns | Ns Ar bookmark Ns ...
 .Nm
 .Cm inherit
 .Op Fl rS
@@ -165,12 +165,12 @@
 .Ar snapshot bookmark
 .Nm
 .Cm send
-.Op Fl DLPRenpv
+.Op Fl DLPRcenpv
 .Op Oo Fl I Ns | Ns Fl i Oc Ar snapshot
 .Ar snapshot
 .Nm
 .Cm send
-.Op Fl Le
+.Op Fl Lce
 .Op Fl i Ar snapshot Ns | Ns Ar bookmark
 .Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot
 .Nm
@@ -615,22 +615,27 @@ The amount of space consumed by this dataset and all its descendents. This is
 the value that is checked against this dataset's quota and reservation. The
 space used does not include this dataset's reservation, but does take into
 account the reservations of any descendent datasets. The amount of space that a
-dataset consumes from its parent, as well as the amount of space that are freed
+dataset consumes from its parent, as well as the amount of space that is freed
 if this dataset is recursively destroyed, is the greater of its space used and
 its reservation.
 .Pp
-When snapshots
+The used space of a snapshot
 .Po see the
 .Sx Snapshots
 section
 .Pc
-are created, their space is initially shared between the snapshot and
-the file system, and possibly with previous snapshots. As the file system
-changes, space that was previously shared becomes unique to the snapshot, and
-counted in the snapshot's space used. Additionally, deleting snapshots can
-increase the amount of space unique to
-.Pq and used by
-other snapshots.
+is space that is referenced exclusively by this snapshot. If this snapshot is
+destroyed, the amount of
+.Sy used
+space will be freed. Space that is shared by multiple snapshots isn't accounted
+for in this metric. When a snapshot is destroyed, space that was previously
+shared with this snapshot can become unique to snapshots adjacent to it, thus
+changing the used space of those snapshots. The used space of the latest
+snapshot can also be affected by changes in the file system. Note that the
+.Sy used
+space of a snapshot is a subset of the
+.Sy written
+space of the snapshot.
 .Pp
 The amount of space used, available, or referenced does not take into account
 pending changes. Pending changes are generally accounted for within a few
@@ -743,7 +748,7 @@ or a user who has been granted the
 privilege with
 .Nm zfs Cm allow ,
 can access all groups' usage.
-.It Sy volblocksize Ns = Ns Em blocksize
+.It Sy volblocksize
 For volumes, specifies the block size of the volume. The
 .Sy blocksize
 cannot be changed once the volume has been written, so it should be set at
@@ -754,8 +759,10 @@ for volumes is 8 Kbytes. Any power of 2 from 512 bytes to 128 Kbytes is valid.
 This property can also be referred to by its shortened column name,
 .Sy volblock .
 .It Sy written
-The amount of
+The amount of space
 .Sy referenced
+by this dataset, that was written since the previous snapshot
+.Pq i.e. that is not referenced by the previous snapshot .
 space written to this dataset since the previous snapshot.
 .It Sy written Ns @ Ns Em snapshot
 The amount of
@@ -1629,9 +1636,8 @@ and so forth
 .Pc
 can be used to manipulate both native properties and user properties. Use the
 .Nm zfs Cm inherit
-command to clear a user property . If the property is not defined in any parent
-dataset, it is removed entirely. Property values are limited to 1024
-characters.
+command to clear a user property. If the property is not defined in any parent
+dataset, it is removed entirely. Property values are limited to 8192 bytes.
 .Ss ZFS Volumes as Swap or Dump Devices
 During an initial installation a swap device and dump device are created on ZFS
 volumes in the ZFS root pool. By default, the swap area size is based on 1/2 the
@@ -2013,6 +2019,12 @@ Same as the
 option, but sorts by property in descending order.
 .It Fl d Ar depth
 Recursively display any children of the dataset, limiting the recursion to
+.Ar depth .
+A
+.Ar depth
+of
+.Sy 1
+will display only the dataset and its direct children.
 .It Fl o Ar property
 A comma-separated list of properties to display. The property must be:
 .Bl -bullet
@@ -2042,10 +2054,6 @@ Display numbers in parsable
 values.
 .It Fl r
 Recursively display any children of the dataset on the command line.
-.Ar depth .
-A depth of
-.Sy 1
-will display only the dataset and its direct children.
 .It Fl s Ar property
 A property for sorting the output by column in ascending order based on the
 value of the property. The property must be one of the properties described in
@@ -2115,7 +2123,7 @@ section.
 .Oo Fl s Ar source Ns Oo , Ns Ar source Oc Ns ... Oc
 .Oo Fl t Ar type Ns Oo , Ns Ar type Oc Ns ... Oc
 .Cm all | Ar property Ns Oo , Ns Ar property Oc Ns ...
-.Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot Ns ...
+.Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot Ns | Ns Ar bookmark Ns ...
 .Xc
 Displays properties for the given datasets. If no datasets are specified, then
 the command displays properties for all datasets on the system. For each
@@ -2443,7 +2451,7 @@ feature.
 .It Xo
 .Nm
 .Cm send
-.Op Fl DLPRenpv
+.Op Fl DLPRcenpv
 .Op Oo Fl I Ns | Ns Fl i Oc Ar snapshot
 .Ar snapshot
 .Xc
@@ -2456,10 +2464,10 @@ to a different system
 .Pc .
 By default, a full stream is generated.
 .Bl -tag -width "-D"
-.It Fl D
+.It Fl D, -dedup
 Generate a deduplicated stream. Blocks which would have been sent multiple times
 in the send stream will only be sent once. The receiving system must also
-support this feature to recieve a deduplicated stream. This flag can be used
+support this feature to receive a deduplicated stream. This flag can be used
 regardless of the dataset's
 .Sy dedup
 property, but performance will be much better if the filesystem uses a
@@ -2476,7 +2484,7 @@ is similar to
 The incremental source may be specified as with the
 .Fl i
 option.
-.It Fl L
+.It Fl L, -large-block
 Generate a stream which may contain blocks larger than 128KB. This flag has no
 effect if the
 .Sy large_blocks
@@ -2490,9 +2498,9 @@ pool feature enabled as well. See
 for details on ZFS feature flags and the
 .Sy large_blocks
 feature.
-.It Fl P
+.It Fl P, -parsable
 Print machine-parsable verbose information about the stream package generated.
-.It Fl R
+.It Fl R, -replicate
 Generate a replication stream package, which will replicate the specified
 file system, and all descendent file systems, up to the named snapshot. When
 received, all properties, snapshots, descendent file systems, and clones are
@@ -2510,7 +2518,7 @@ is received. If the
 .Fl F
 flag is specified when this stream is received, snapshots and file systems that
 do not exist on the sending side are destroyed.
-.It Fl e
+.It Fl e, -embed
 Generate a more compact stream by using
 .Sy WRITE_EMBEDDED
 records for blocks which are stored more compactly on disk by the
@@ -2527,6 +2535,16 @@ that feature enabled as well. See
 for details on ZFS feature flags and the
 .Sy embedded_data
 feature.
+.It Fl c, -compressed
+Generate a more compact stream by using compressed WRITE records for blocks
+which are compressed on disk and in memory (see the
+.Sy compression No property for details).  If the Sy lz4_compress No feature
+is active on the sending system, then the receiving system must have that
+feature enabled as well. If the
+.Sy large_blocks No feature is enabled on the sending system but the Fl L
+option is not supplied in conjunction with
+.Fl c, No then the data will be decompressed before sending so it can be split
+into smaller block sizes.
 .It Fl i Ar snapshot
 Generate an incremental stream from the first
 .Ar snapshot
@@ -2549,7 +2567,7 @@ be fully specified
 not just
 .Em @origin
 .Pc .
-.It Fl n
+.It Fl n, -dryrun
 Do a dry-run
 .Pq Qq No-op
 send. Do not generate any actual send data. This is useful in conjunction with
@@ -2562,11 +2580,11 @@ be written to standard output
 .Po contrast with a non-dry-run, where the stream is written to standard output
 and the verbose output goes to standard error
 .Pc .
-.It Fl p
+.It Fl p, -props
 Include the dataset's properties in the stream. This flag is implicit when
 .Fl R
 is specified. The receiving system must also support this feature.
-.It Fl v
+.It Fl v, -verbose
 Print verbose information about the stream package generated. This information
 includes a per-second report of how much data has been sent.
 .Pp
@@ -2576,7 +2594,7 @@ on future versions of ZFS .
 .It Xo
 .Nm
 .Cm send
-.Op Fl Le
+.Op Fl Lce
 .Op Fl i Ar snapshot Ns | Ns Ar bookmark
 .Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot
 .Xc
@@ -2586,7 +2604,7 @@ read-only, or the filesystem must not be mounted. When the stream generated from
 a filesystem or volume is received, the default snapshot name will be
 .Qq --head-- .
 .Bl -tag -width "-L"
-.It Fl L
+.It Fl L, -large-block
 Generate a stream which may contain blocks larger than 128KB. This flag has no
 effect if the
 .Sy large_blocks
@@ -2600,7 +2618,17 @@ pool feature enabled as well. See
 for details on ZFS feature flags and the
 .Sy large_blocks
 feature.
-.It Fl e
+.It Fl c, -compressed
+Generate a more compact stream by using compressed WRITE records for blocks
+which are compressed on disk and in memory (see the
+.Sy compression No property for details).  If the Sy lz4_compress No feature is
+active on the sending system, then the receiving system must have that feature
+enabled as well. If the
+.Sy large_blocks No feature is enabled on the sending system but the Fl L
+option is not supplied in conjunction with
+.Fl c, No then the data will be decompressed before sending so it can be split
+into smaller block sizes.
+.It Fl e, -embed
 Generate a more compact stream by using
 .Sy WRITE_EMBEDDED
 records for blocks which are stored more compactly on disk by the
@@ -3019,7 +3047,7 @@ Recursively remove the permissions from this file system and all descendents.
 .Nm
 .Cm unallow
 .Op Fl r
-.Fl s @ Ns Ar setname
+.Fl s No @ Ns Ar setname
 .Oo Ar perm Ns | Ns @ Ns Ar setname Ns Oo , Ns Ar perm Ns | Ns @ Ns
 .Ar setname Oc Ns ... Oc
 .Ar filesystem Ns | Ns Ar volume
@@ -3500,7 +3528,7 @@ M       F       /tank/test/modified
 .Ed
 .El
 .Sh INTERFACE STABILITY
-.Sy Commited .
+.Sy Committed .
 .Sh SEE ALSO
 .Xr gzip 1 ,
 .Xr ssh 1 ,

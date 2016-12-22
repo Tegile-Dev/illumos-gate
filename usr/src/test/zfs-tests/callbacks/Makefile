@@ -1,0 +1,36 @@
+#
+# This file and its contents are supplied under the terms of the
+# Common Development and Distribution License ("CDDL"), version 1.0.
+# You may only use this file in accordance with the terms of version
+# 1.0 of the CDDL.
+#
+# A full copy of the text of the CDDL should have accompanied this
+# source.  A copy of the CDDL is also available via the Internet at
+# http://www.illumos.org/license/CDDL.
+#
+
+#
+# Copyright (c) 2016 by Delphix. All rights reserved.
+#
+
+include $(SRC)/Makefile.master
+
+CALLBACKS = zfs_dbgmsg.ksh
+
+ROOTOPTPKG = $(ROOT)/opt/zfs-tests
+CALLBACKSDIR = $(ROOTOPTPKG)/callbacks
+
+FILES = $(CALLBACKS:%=$(CALLBACKSDIR)/%)
+$(FILES) := FILEMODE = 0555
+
+all: $(CALLBACKS)
+
+install: $(CALLBACKSDIR) $(FILES)
+
+clean lint clobber:
+
+$(CALLBACKSDIR):
+	$(INS.dir)
+
+$(CALLBACKSDIR)/%: %
+	$(INS.file)

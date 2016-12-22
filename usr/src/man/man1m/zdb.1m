@@ -11,17 +11,17 @@
 .\"
 .\"
 .\" Copyright 2012, Richard Lowe.
-.\" Copyright (c) 2012, 2014 by Delphix. All rights reserved.
+.\" Copyright (c) 2012, 2016 by Delphix. All rights reserved.
 .\"
-.TH "ZDB" "1M" "March 6, 2014" "" ""
+.TH "ZDB" "1M" "Feb 4, 2016" "" ""
 
 .SH "NAME"
 \fBzdb\fR - Display zpool debugging and consistency information
 
 .SH "SYNOPSIS"
-\fBzdb\fR [-CumdibcsDvhLMXFPA] [-e [-p \fIpath\fR...]] [-t \fItxg\fR]
+\fBzdb\fR [-CumdibcsDvhLMXFPAG] [-e [-p \fIpath\fR...]] [-t \fItxg\fR]
     [-U \fIcache\fR] [-I \fIinflight I/Os\fR] [-x \fIdumpdir\fR]
-    [\fIpoolname\fR [\fIobject\fR ...]]
+    [-o \fIvar\fR=\fIvalue\fR] ... [\fIpoolname\fR [\fIobject\fR ...]]
 
 .P
 \fBzdb\fR [-divPA] [-e [-p \fIpath\fR...]] [-U \fIcache\fR]
@@ -54,6 +54,11 @@ a fsck(1M) nor an fsdb(1M) utility.
 The output of this command in general reflects the on-disk structure of a ZFS
 pool, and is inherently unstable. The precise output of most invocations is
 not documented, a knowledge of ZFS internals is assumed.
+
+.P
+If the \fIdataset\fR argument does not contain any \fB/\fR or \fB@\fR
+characters, it is interpreted as a pool name.  The root dataset can be
+specified as \fIpool\fB/\fR (pool name followed by a slash).
 
 .P
 When operating on an imported and active pool it is possible, though unlikely,
@@ -395,6 +400,17 @@ transactions.
 .sp
 .ne 2
 .na
+\fB-G\fR
+.ad
+.sp .6
+.RS 4n
+Dump the contents of the zfs_dbgmsg buffer before exiting zdb. zfs_dbgmsg is
+a buffer used by ZFS to dump advanced debug information.
+.RE
+
+.sp
+.ne 2
+.na
 \fB-I \fIinflight I/Os\fR \fR
 .ad
 .sp .6
@@ -402,6 +418,18 @@ transactions.
 Limit the number of outstanding checksum I/Os to the specified value. The
 default value is 200. This option affects the performance of the \fB-c\fR
 option.
+.RE
+
+.sp
+.ne 2
+.na
+\fB-o \fIvar\fR=\fIvalue\fR ... \fR
+.ad
+.sp .6
+.RS 4n
+Set the given global libzpool variable to the provided value. The value must
+be an unsigned 32-bit integer. Currently only little-endian systems are
+supported to avoid accidentally setting the high 32 bits of 64-bit variables.
 .RE
 
 .sp

@@ -27,6 +27,7 @@
 # Copyright (c) 2013 RackTop Systems.
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
 # Copyright 2014 Nexenta Systems, Inc.  All rights reserved.
+# Copyright 2016 Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
 #
 
 #
@@ -199,6 +200,7 @@ DIRS= \
 	/lib/svc/seed \
 	/lib/svc/share \
 	/kernel  \
+	/kernel/firmware \
 	/mnt  \
 	/opt  \
 	/platform  \
@@ -283,12 +285,12 @@ DIRS= \
 	/usr/net \
 	/usr/net/servers \
 	/usr/lib/pool \
-	/usr/lib/python2.6 \
-	/usr/lib/python2.6/vendor-packages \
-	/usr/lib/python2.6/vendor-packages/64 \
-	/usr/lib/python2.6/vendor-packages/solaris \
-	/usr/lib/python2.6/vendor-packages/zfs \
-	/usr/lib/python2.6/vendor-packages/beadm \
+	/usr/lib/python$(PYTHON_VERSION) \
+	/usr/lib/python$(PYTHON_VERSION)/vendor-packages \
+	/usr/lib/python$(PYTHON_VERSION)/vendor-packages/64 \
+	/usr/lib/python$(PYTHON_VERSION)/vendor-packages/solaris \
+	/usr/lib/python$(PYTHON_VERSION)/vendor-packages/zfs \
+	/usr/lib/python$(PYTHON_VERSION)/vendor-packages/beadm \
 	/usr/lib/rcap \
 	/usr/lib/rcap/$(MACH32) \
 	/usr/lib/sa  \

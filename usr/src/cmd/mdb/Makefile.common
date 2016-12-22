@@ -34,7 +34,7 @@ COMMON_MODULES_PROC = \
 	libfksmbsrv \
 	libnvpair \
 	libproc \
-	libpython2.6 \
+	libpython \
 	libsysevent \
 	libtopo \
 	libumem \
@@ -65,7 +65,6 @@ COMMON_MODULES_KVM = \
 	genunix \
 	hook \
 	neti \
-	i40e \
 	idm \
 	ii \
 	ip \

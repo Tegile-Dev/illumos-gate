@@ -19,7 +19,8 @@
  * CDDL HEADER END
  */
 /*
- * Copyright 2012 Nexenta Systems, Inc.  All rights reserved.
+ * Copyright 2016 Toomas Soome <tsoome@me.com>
+ * Copyright 2016 Nexenta Systems, Inc.  All rights reserved.
  * Copyright 2009 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
  */
@@ -30,11 +31,13 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <ctype.h>
+#include <unistd.h>
 #include <sys/int_fmtio.h>
 #include <sys/stat.h>
 #include <bsm/devalloc.h>
 #include <sys/scsi/scsi_address.h>
 #include <sys/libdevid.h>
+#include <sys/lofi.h>
 
 #define	DISK_SUBPATH_MAX 100
 #define	RM_STALE 0x01
@@ -61,6 +64,7 @@ extern int system_labeled;
 
 static int disk_callback_chan(di_minor_t minor, di_node_t node);
 static int disk_callback_nchan(di_minor_t minor, di_node_t node);
+static int disk_callback_blkdev(di_minor_t minor, di_node_t node);
 static int disk_callback_wwn(di_minor_t minor, di_node_t node);
 static int disk_callback_xvmd(di_minor_t minor, di_node_t node);
 static int disk_callback_fabric(di_minor_t minor, di_node_t node);
@@ -69,6 +73,7 @@ static void disk_common(di_minor_t minor, di_node_t node, char *disk,
 				int flags);
 static char *diskctrl(di_node_t node, di_minor_t minor);
 static int reserved_links_exist(di_node_t node, di_minor_t minor, int nflags);
+static void disk_rm_lofi_all(char *file);
 
 
 static devfsadm_create_t disk_cbt[] = {
@@ -77,6 +82,9 @@ static devfsadm_create_t disk_cbt[] = {
 	},
 	{ "disk", DDI_NT_BLOCK_CHAN, NULL,
 	    TYPE_EXACT, ILEVEL_0, disk_callback_chan
+	},
+	{ "disk", DDI_NT_BLOCK_BLKDEV, NULL,
+	    TYPE_EXACT, ILEVEL_0, disk_callback_blkdev
 	},
 	{ "disk", DDI_NT_BLOCK_FABRIC, NULL,
 		TYPE_EXACT, ILEVEL_0, disk_callback_fabric
@@ -104,9 +112,12 @@ static devfsadm_create_t disk_cbt[] = {
 DEVFSADM_CREATE_INIT_V0(disk_cbt);
 
 /*
- * HOT auto cleanup of disks not desired.
+ * HOT auto cleanup of disks is done for lofi devices only.
  */
 static devfsadm_remove_t disk_remove_cbt[] = {
+	{ "disk", DISK_LINK_RE, RM_HOT | RM_POST | RM_ALWAYS,
+		ILEVEL_0, disk_rm_lofi_all
+	},
 	{ "disk", DISK_LINK_RE, RM_POST,
 		ILEVEL_0, devfsadm_rm_all
 	}
@@ -124,6 +135,44 @@ static devlink_re_t disks_re_array[] = {
 static char *disk_mid = "disk_mid";
 static char *modname = "disk_link";
 
+/*
+ * Check if link is from lofi by checking path from readlink().
+ */
+static int
+is_lofi_disk(char *file)
+{
+	char buf[PATH_MAX + 1];
+	char filepath[PATH_MAX];
+	char *ptr;
+	ssize_t size;
+
+	size = snprintf(filepath, sizeof (filepath), "%s/dev/%s",
+	    devfsadm_root_path(), file);
+	if (size > sizeof (filepath))
+		return (0);
+
+	size = readlink(filepath, buf, sizeof (buf) - 1);
+	if (size == -1)
+		return (0);
+	buf[size] = '\0';
+	ptr = strchr(buf, '@');
+	if (ptr == NULL)
+		return (0);
+	ptr[1] = '\0';
+	if (strcmp(buf, "../../devices/pseudo/lofi@") != 0)
+		return (0);
+	return (1);
+}
+
+/*
+ * Wrapper around devfsadm_rm_link() for lofi devices.
+ */
+static void disk_rm_lofi_all(char *file)
+{
+	if (is_lofi_disk(file))
+		devfsadm_rm_link(file);
+}
+
 int
 minor_init()
 {
@@ -137,13 +186,20 @@ static int
 disk_callback_chan(di_minor_t minor, di_node_t node)
 {
 	char *addr;
-	char disk[20];
-	uint_t targ;
-	uint_t lun;
+	char disk[23];
+	char *driver;
+	uint_t targ = 0;
+	uint_t lun = 0;
 
-	addr = di_bus_addr(node);
-	(void) sscanf(addr, "%X,%X", &targ, &lun);
-	(void) sprintf(disk, "t%dd%d", targ, lun);
+	driver = di_driver_name(node);
+	if (strcmp(driver, LOFI_DRIVER_NAME) != 0) {
+		addr = di_bus_addr(node);
+		(void) sscanf(addr, "%X,%X", &targ, &lun);
+	} else {
+		targ = di_instance(node);
+	}
+
+	(void) snprintf(disk, sizeof (disk), "t%dd%d", targ, lun);
 	disk_common(minor, node, disk, 0);
 	return (DEVFSADM_CONTINUE);
 
@@ -162,6 +218,21 @@ disk_callback_nchan(di_minor_t minor, di_node_t node)
 	disk_common(minor, node, disk, 0);
 	return (DEVFSADM_CONTINUE);
 
+}
+
+static int
+disk_callback_blkdev(di_minor_t minor, di_node_t node)
+{
+	char *addr;
+	char disk[DISK_SUBPATH_MAX];
+	uint64_t eui64;
+	uint_t lun = 0;
+
+	addr = di_bus_addr(node);
+	(void) sscanf(addr, "w%016"PRIx64",%X", &eui64, &lun);
+	(void) snprintf(disk, DISK_SUBPATH_MAX, "t%016"PRIX64"d%d", eui64, lun);
+	disk_common(minor, node, disk, RM_STALE);
+	return (DEVFSADM_CONTINUE);
 }
 
 static int
@@ -586,6 +657,7 @@ diskctrl(di_node_t node, di_minor_t minor)
 	char path[PATH_MAX + 1];
 	char *devfspath;
 	char *buf, *mn;
+	boolean_t is_vhci;
 
 	devfsadm_enumerate_t rules[3] = {
 	    {"^r?dsk$/^c([0-9]+)", 1, MATCH_PARENT},
@@ -606,9 +678,10 @@ diskctrl(di_node_t node, di_minor_t minor)
 	/*
 	 * Use controller component of disk path
 	 */
-	if (disk_enumerate_int(path, RULE_INDEX, &buf, rules, 3) ==
-	    DEVFSADM_MULTIPLE) {
+	is_vhci = (strncmp(path, "/scsi_vhci/", 11) == 0);
 
+	if (ctrl_enumerate_int(path, RULE_INDEX, &buf, rules, 3, 1, is_vhci) ==
+	    DEVFSADM_MULTIPLE) {
 		/*
 		 * We failed because there are multiple logical controller
 		 * numbers for a single physical controller.  If we use node
@@ -623,7 +696,8 @@ diskctrl(di_node_t node, di_minor_t minor)
 
 		rules[0].flags = MATCH_NODE | MATCH_UNCACHED; /* disks */
 		rules[2].flags = MATCH_NODE | MATCH_UNCACHED; /* generic scsi */
-		if (devfsadm_enumerate_int(path, RULE_INDEX, &buf, rules, 3)) {
+		if (ctrl_enumerate_int(path, RULE_INDEX, &buf, rules, 3, 0,
+		    is_vhci)) {
 			return (NULL);
 		}
 	}
