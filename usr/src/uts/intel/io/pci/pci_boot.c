@@ -184,6 +184,36 @@ typedef struct {
 nvf_handle_t	puafd_handle;
 int		pua_cache_valid = 0;
 
+static void
+enumerate_acpi_bus(ACPI_HANDLE hdl, int busnum)
+{
+	/*
+	 * If necessary expand the pci_bus_res array and initialise the
+	 * entry for busnum.
+	 */
+	if (busnum > pci_bios_maxbus) {
+		pci_bios_maxbus = busnum;
+		alloc_res_array();
+	}
+
+	pci_bus_res[busnum].par_bus = (uchar_t)-1;
+	pci_bus_res[busnum].root_addr = (uchar_t)-1;
+	pci_bus_res[busnum].sub_bus = busnum;
+
+	create_root_bus_dip((uchar_t)busnum);
+
+	/*
+	 * Create any acpi specific properties and link the dip
+	 * into the acpi tree.
+	 */
+	(void) acpica_tag_devinfo(pci_bus_res[busnum].dip, hdl);
+
+	/*
+	 * Do the first scan of the bus to get the list of devices and funcs.
+	 */
+	enumerate_bus_devs(busnum, CONFIG_INFO);
+	add_bus_slot_names_prop(busnum);
+}
 
 /*ARGSUSED*/
 static ACPI_STATUS
@@ -235,10 +265,22 @@ pci_process_acpi_device(ACPI_HANDLE hdl, UINT32 level, void *ctx, void **rv)
 		 * than panic) and emit a warning; something else
 		 * may suffer failure as a result of the broken BIOS.
 		 */
-		if ((busnum < 0) || (busnum > pci_bios_maxbus)) {
+		if (busnum < 0 || busnum >= PCI_MAX_BUS_NUM) {
 			dcmn_err(CE_NOTE,
 			    "pci_process_acpi_device: invalid _BBN 0x%x\n",
 			    busnum);
+			return (AE_CTRL_DEPTH);
+		}
+
+		if (busnum > pci_bios_maxbus) {
+			/*
+			 * A bus beyond the reported BIOS reported max.
+			 */
+			cmn_err(CE_CONT,
+			    "?found _BBN 0x%x beyond BIOS maxbus 0x%x, "
+			    "enumerating ...\n", busnum, pci_bios_maxbus);
+
+			enumerate_acpi_bus(hdl, busnum);
 			return (AE_CTRL_DEPTH);
 		}
 
@@ -246,6 +288,7 @@ pci_process_acpi_device(ACPI_HANDLE hdl, UINT32 level, void *ctx, void **rv)
 		if (pci_bus_res[busnum].par_bus == (uchar_t)-1 &&
 		    pci_bus_res[busnum].dip == NULL)
 			create_root_bus_dip((uchar_t)busnum);
+
 		return (AE_CTRL_DEPTH);
 	}
 
@@ -257,8 +300,8 @@ pci_process_acpi_device(ACPI_HANDLE hdl, UINT32 level, void *ctx, void **rv)
  * Scan the ACPI namespace for all top-level instances of _BBN
  * in order to discover childless root-bridges (which enumeration
  * may not find; root-bridges are inferred by the existence of
- * children).  This scan should find all root-bridges that have
- * been enumerated, and any childless root-bridges not enumerated.
+ * children).  This scan should find all root-bridges. Any which have
+ * not been previously enumerated will be enumerated here.
  * Root-bridge for bus 0 may not have a _BBN object.
  */
 static void
@@ -1279,8 +1322,9 @@ pci_reprogram(void)
 	int bus;
 
 	/*
-	 * Scan ACPI namespace for _BBN objects, make sure that
-	 * childless root-bridges appear in devinfo tree
+	 * Scan ACPI namespace for _BBN objects. Find any root-bridges
+	 * not previously enumerated (possibly because BIOS mis-reported
+	 * the maximum bus number).
 	 */
 	pci_scan_bbn();
 	pci_unitaddr_cache_init();
