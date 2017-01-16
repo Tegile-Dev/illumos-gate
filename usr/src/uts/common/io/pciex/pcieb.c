@@ -20,6 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Tegile Systems, Inc. All rights reserved.
  */
 /*
  * Copyright 2012 Garrett D'Amore <garrett@damore.org>.  All rights reserved.
@@ -59,7 +60,7 @@
 /*LINTLIBRARY*/
 
 /* panic flag */
-int pcieb_die = PF_ERR_FATAL_FLAGS;
+int pcieb_die = PF_ERR_PANIC | PF_ERR_PANIC_DEADLOCK;
 int pcieb_disable_41210_wkarnd = 0;
 
 /* flag to turn on MSI support */
@@ -1784,6 +1785,9 @@ pcieb_create_ranges_prop(dev_info_t *dip,
 	ppb_ranges_t	ranges[PCIEB_RANGE_LEN];
 	uint8_t io_base_lo, io_limit_lo;
 	uint16_t io_base_hi, io_limit_hi, mem_base, mem_limit;
+	uint16_t pf_mem_base, pf_mem_limit;
+	uint32_t pf_mem_base_hi, pf_mem_limit_hi;
+	uint64_t pf_base, pf_limit;
 	int i = 0, rangelen = sizeof (ppb_ranges_t)/sizeof (int);
 
 	io_base_lo = pci_config_get8(config_handle, PCI_BCNF_IO_BASE_LOW);
@@ -1792,13 +1796,18 @@ pcieb_create_ranges_prop(dev_info_t *dip,
 	io_limit_hi = pci_config_get16(config_handle, PCI_BCNF_IO_LIMIT_HI);
 	mem_base = pci_config_get16(config_handle, PCI_BCNF_MEM_BASE);
 	mem_limit = pci_config_get16(config_handle, PCI_BCNF_MEM_LIMIT);
+	pf_mem_base = pci_config_get16(config_handle, PCI_BCNF_PF_BASE_LOW);
+	pf_mem_limit = pci_config_get16(config_handle, PCI_BCNF_PF_LIMIT_LOW);
+	pf_mem_base_hi = pci_config_get32(config_handle, PCI_BCNF_PF_BASE_HIGH);
+	pf_mem_limit_hi = pci_config_get32(config_handle,
+	    PCI_BCNF_PF_LIMIT_HIGH);
 
 	/*
 	 * Create ranges for IO space
 	 */
 	ranges[i].size_low = ranges[i].size_high = 0;
-	ranges[i].parent_mid = ranges[i].child_mid = ranges[i].parent_high = 0;
-	ranges[i].child_high = ranges[i].parent_high |=
+	ranges[i].parent_mid = ranges[i].child_mid = 0;
+	ranges[i].child_high = ranges[i].parent_high =
 	    (PCI_REG_REL_M | PCI_ADDR_IO);
 	base = PCIEB_16bit_IOADDR(io_base_lo);
 	limit = PCIEB_16bit_IOADDR(io_limit_lo);
@@ -1821,12 +1830,35 @@ pcieb_create_ranges_prop(dev_info_t *dip,
 	base = PCIEB_32bit_MEMADDR(mem_base);
 	limit = PCIEB_32bit_MEMADDR(mem_limit);
 	ranges[i].size_low = ranges[i].size_high = 0;
-	ranges[i].parent_mid = ranges[i].child_mid = ranges[i].parent_high = 0;
-	ranges[i].child_high = ranges[i].parent_high |=
+	ranges[i].parent_mid = ranges[i].child_mid = 0;
+	ranges[i].child_high = ranges[i].parent_high =
 	    (PCI_REG_REL_M | PCI_ADDR_MEM32);
 	ranges[i].child_low = ranges[i].parent_low = base;
 	if (limit >= base) {
 		ranges[i].size_low = limit - base + PCIEB_MEMGRAIN;
+		i++;
+	}
+
+	base = PCIEB_32bit_MEMADDR(pf_mem_base);
+	limit = PCIEB_32bit_MEMADDR(pf_mem_limit);
+	ranges[i].child_high = ranges[i].parent_high =
+	    (PCI_REG_REL_M | PCI_ADDR_MEM64 | PCI_REG_PF_M);
+	ranges[i].child_low = ranges[i].parent_low = base;
+	ranges[i].child_mid = ranges[i].parent_mid = pf_mem_base_hi;
+	ranges[i].size_low = ranges[i].size_high = 0;
+	if ((pf_mem_base & PCI_BCNF_ADDR_MASK) == PCI_BCNF_PF_MEM_64BIT) {
+		ranges[i].child_mid = ranges[i].parent_mid = pf_mem_base_hi;
+		pf_base = (uint64_t)pf_mem_base_hi << 32 | base;
+		pf_limit = (uint64_t)pf_mem_limit_hi << 32 | limit;
+	} else {
+		ranges[i].child_mid = ranges[i].parent_mid = 0;
+		pf_base = base;
+		pf_limit = limit;
+	}
+	if (pf_limit >= pf_base) {
+		pf_limit -= base - PCIEB_MEMGRAIN;
+		ranges[i].size_low = (uint_t)pf_limit;
+		ranges[i].size_high = (uint_t)(pf_limit >> 32);
 		i++;
 	}
 

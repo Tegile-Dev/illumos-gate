@@ -22,6 +22,7 @@
  * Copyright 2009 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
  * Copyright 2012 Milan Jurik. All rights reserved.
+ * Copyright (c) 2017, Tegile Systems, Inc. All rights reserved.
  */
 
 #if defined(DEBUG)
@@ -41,6 +42,8 @@
 
 #include <sys/types.h>
 #include <sys/systm.h>
+#include <sys/sysmacros.h>
+#include <sys/list.h>
 #include <sys/ddi.h>
 #include <sys/sunddi.h>
 #include <sys/sunndi.h>
@@ -74,7 +77,7 @@ kmutex_t ra_lock;
  * basic resource element
  */
 struct ra_resource {
-	struct ra_resource *ra_next;
+	list_node_t	ra_link;
 	uint64_t	ra_base;
 	uint64_t 	ra_len;
 };
@@ -87,7 +90,7 @@ struct ra_resource {
  */
 struct ra_dip_type  {
 	struct ra_dip_type *ra_next;
-	struct ra_resource  *ra_rangeset;
+	list_t ra_rangeset;
 	dev_info_t *ra_dip;
 };
 
@@ -132,7 +135,7 @@ static int pci_get_available_prop(dev_info_t *dip, uint64_t base,
     uint64_t len, char *busra_type);
 static int pci_put_available_prop(dev_info_t *dip, uint64_t base,
     uint64_t len, char *busra_type);
-static uint32_t pci_type_ra2pci(char *type);
+static uint32_t pci_type_ra2pci(char *type, uint64_t base, uint64_t size);
 static boolean_t is_pcie_fabric(dev_info_t *dip);
 
 #define	PCI_ADDR_TYPE_MASK	(PCI_REG_ADDR_M | PCI_REG_PF_M)
@@ -229,6 +232,9 @@ ndi_ra_map_setup(dev_info_t *dip, char *type)
 			dipmap = (struct ra_dip_type *)
 			    kmem_zalloc(sizeof (*dipmap), KM_SLEEP);
 			dipmap->ra_dip = dip;
+			list_create(&dipmap->ra_rangeset,
+			    sizeof (struct ra_resource),
+			    offsetof(struct ra_resource, ra_link));
 			RA_INSERT(&typemapp->ra_dip_list, dipmap);
 		}
 	}
@@ -261,13 +267,12 @@ ndi_ra_map_destroy(dev_info_t *dip, char *type)
 	 * remove dip from type list
 	 */
 	ASSERT((backdip != NULL) && (backtype != NULL));
-	while (dipmap->ra_rangeset != NULL) {
-		range = dipmap->ra_rangeset;
-		RA_REMOVE(&dipmap->ra_rangeset, range);
+	while ((range = list_remove_head(&dipmap->ra_rangeset)) != NULL)
 		kmem_free((caddr_t)range, sizeof (*range));
-	}
+
 	/* remove from dip list */
 	RA_REMOVE(backdip, dipmap);
+	list_destroy(&dipmap->ra_rangeset);
 	kmem_free((caddr_t)dipmap, sizeof (*dipmap));
 	if ((*backtype)->ra_dip_list == NULL) {
 		/*
@@ -360,8 +365,8 @@ ndi_ra_free(dev_info_t *dip, uint64_t base, uint64_t len, char *type,
     uint32_t flag)
 {
 	struct ra_dip_type *dipmap;
-	struct ra_resource *newmap, *overlapmap, *oldmap = NULL;
-	struct ra_resource  *mapp, **backp;
+	struct ra_resource *newmap, *overlapmap, *oldmap;
+	struct ra_resource  *mapp;
 	uint64_t newend, mapend;
 	struct ra_dip_type **backdip;
 	struct ra_type_map **backtype;
@@ -378,12 +383,10 @@ ndi_ra_free(dev_info_t *dip, uint64_t base, uint64_t len, char *type,
 		return (NDI_FAILURE);
 	}
 
-	mapp = dipmap->ra_rangeset;
-	backp = &dipmap->ra_rangeset;
-
 	/* now find where range lies and fix things up */
 	newend = base + len;
-	for (; mapp != NULL; backp = &(mapp->ra_next), mapp = mapp->ra_next) {
+	for (mapp = list_head(&dipmap->ra_rangeset); mapp != NULL;
+	    mapp = list_next(&dipmap->ra_rangeset, mapp)) {
 		mapend = mapp->ra_base + mapp->ra_len;
 
 		/* check for overlap first */
@@ -392,10 +395,10 @@ ndi_ra_free(dev_info_t *dip, uint64_t base, uint64_t len, char *type,
 			/* overlap with mapp */
 			overlapmap = mapp;
 			goto overlap;
-		} else if ((base == mapend && mapp->ra_next) &&
-		    (newend > mapp->ra_next->ra_base)) {
+		} else if (base == mapend &&
+		    (overlapmap = list_next(&dipmap->ra_rangeset, mapp)) != NULL
+		    && newend > overlapmap->ra_base) {
 			/* overlap with mapp->ra_next */
-			overlapmap = mapp->ra_next;
 			goto overlap;
 		}
 
@@ -411,12 +414,11 @@ ndi_ra_free(dev_info_t *dip, uint64_t base, uint64_t len, char *type,
 		} else if (base == mapend) {
 			/* simple - on end */
 			mapp->ra_len += len;
-			if (mapp->ra_next &&
-			    (newend == mapp->ra_next->ra_base)) {
+			if ((oldmap = list_next(&dipmap->ra_rangeset, mapp)) !=
+			    NULL && newend == oldmap->ra_base) {
 				/* merge with next node */
-				oldmap = mapp->ra_next;
 				mapp->ra_len += oldmap->ra_len;
-				RA_REMOVE(&mapp->ra_next, oldmap);
+				list_remove(&dipmap->ra_rangeset, oldmap);
 				kmem_free((caddr_t)oldmap, sizeof (*oldmap));
 			}
 			break;
@@ -426,7 +428,7 @@ ndi_ra_free(dev_info_t *dip, uint64_t base, uint64_t len, char *type,
 			    kmem_zalloc(sizeof (*newmap), KM_SLEEP);
 			newmap->ra_base = base;
 			newmap->ra_len = len;
-			RA_INSERT(backp, newmap);
+			list_insert_before(&dipmap->ra_rangeset, mapp, newmap);
 			break;
 		}
 	}
@@ -436,7 +438,7 @@ ndi_ra_free(dev_info_t *dip, uint64_t base, uint64_t len, char *type,
 		    kmem_zalloc(sizeof (*newmap), KM_SLEEP);
 		newmap->ra_base = base;
 		newmap->ra_len = len;
-		RA_INSERT(backp, newmap);
+		list_insert_tail(&dipmap->ra_rangeset, newmap);
 	}
 
 	mutex_exit(&ra_lock);
@@ -487,7 +489,7 @@ isnot_pow2(uint64_t value)
 }
 
 static  void
-adjust_link(struct ra_resource **backp, struct ra_resource *mapp,
+adjust_link(list_t *rangeset, struct ra_resource *mapp,
 	    uint64_t base, uint64_t len)
 {
 	struct ra_resource *newmap;
@@ -506,7 +508,7 @@ adjust_link(struct ra_resource **backp, struct ra_resource *mapp,
 			newmap->ra_base = base + len;
 			newmap->ra_len = mapp->ra_len - (len + newlen);
 			mapp->ra_len = newlen;
-			RA_INSERT(&(mapp->ra_next), newmap);
+			list_insert_after(rangeset, mapp, newmap);
 		}
 	} else {
 		/* at the beginning */
@@ -514,7 +516,7 @@ adjust_link(struct ra_resource **backp, struct ra_resource *mapp,
 		mapp->ra_len -= len;
 		if (mapp->ra_len == 0) {
 			/* remove the whole node */
-			RA_REMOVE(backp, mapp);
+			list_remove(rangeset, mapp);
 			kmem_free((caddr_t)mapp, sizeof (*mapp));
 		}
 	}
@@ -525,12 +527,13 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
     uint64_t *retlenp, char *type, uint32_t flag)
 {
 	struct ra_dip_type *dipmap;
-	struct ra_resource *mapp, **backp, **backlargestp;
+	struct ra_resource *mapp, *backlargest;
 	uint64_t mask = 0;
 	uint64_t len, remlen, largestbase, largestlen;
 	uint64_t base, oldbase, lower, upper;
 	struct ra_dip_type  **backdip;
 	struct ra_type_map  **backtype;
+	void *(*list_op)(list_t *, void *);
 	int  rval = NDI_FAILURE;
 
 
@@ -549,10 +552,10 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 	mask = (req->ra_flags & NDI_RA_ALIGN_SIZE) ? (len - 1) :
 	    req->ra_align_mask;
 
-
 	mutex_enter(&ra_lock);
 	dipmap = find_dip_map_resources(dip, type, &backdip, &backtype, flag);
-	if ((dipmap == NULL) || ((mapp = dipmap->ra_rangeset) == NULL)) {
+	if (dipmap == NULL ||
+	    (mapp = list_head(&dipmap->ra_rangeset)) == NULL) {
 		mutex_exit(&ra_lock);
 		DEBUGPRT(CE_CONT, "ndi_ra_alloc no map found for this type\n");
 		return (NDI_FAILURE);
@@ -561,25 +564,26 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 	DEBUGPRT(CE_CONT, "ndi_ra_alloc: mapp = %p len=%" PRIx64 ", mask=%"
 	    PRIx64 "\n", (void *)mapp, len, mask);
 
-	backp = &(dipmap->ra_rangeset);
-	backlargestp = NULL;
+	backlargest = NULL;
 	largestbase = 0;
 	largestlen = 0;
 
 	lower = 0;
 	upper = ~(uint64_t)0;
+	list_op = list_next;
 
 	if (req->ra_flags & NDI_RA_ALLOC_BOUNDED) {
 		/* bounded so skip to first possible */
 		lower = req->ra_boundbase;
 		upper = req->ra_boundlen + lower;
-		if ((upper == 0) || (upper < req->ra_boundlen))
+		if (req->ra_boundlen == 0 || upper == 0 ||
+		    upper < req->ra_boundlen)
 			upper = ~(uint64_t)0;
 		DEBUGPRT(CE_CONT, "ndi_ra_alloc: ra_len = %" PRIx64 ", len = %"
 		    PRIx64 " ra_base=%" PRIx64 ", mask=%" PRIx64
 		    "\n", mapp->ra_len, len, mapp->ra_base, mask);
 		for (; mapp != NULL && (mapp->ra_base + mapp->ra_len) < lower;
-		    backp = &(mapp->ra_next), mapp = mapp->ra_next) {
+		    mapp = list_next(&dipmap->ra_rangeset, mapp)) {
 			if (((mapp->ra_len + mapp->ra_base) == 0) ||
 			    ((mapp->ra_len + mapp->ra_base) < mapp->ra_len))
 				/*
@@ -591,8 +595,24 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 
 			DEBUGPRT(CE_CONT, " ra_len = %" PRIx64 ", ra_base=%"
 			    PRIx64 "\n", mapp->ra_len, mapp->ra_base);
-			}
+		}
 
+		/*
+		 * Re-adjust lower to make sure the for ( ... ) below
+		 * is ok when running backwards.
+		 */
+		if (mapp)
+			lower = mapp->ra_base;
+	}
+
+	if (upper == ~(uint64_t)0) {
+		/*
+		 * If it is not upper bounded, then we assume it is a search
+		 * for a 64 bit address. In that case we search from
+		 * high to low to try and avoid depleting 32 bit addresses.
+		 */
+		list_op = list_prev;
+		mapp = list_tail(&dipmap->ra_rangeset);
 	}
 
 	if (!(req->ra_flags & NDI_RA_ALLOC_SPECIFIED)) {
@@ -600,16 +620,14 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 		DEBUGPRT(CE_CONT, "ndi_ra_alloc(unspecified request)"
 		    "lower=%" PRIx64 ", upper=%" PRIx64 "\n", lower, upper);
 		for (; mapp != NULL && mapp->ra_base <= upper;
-		    backp = &(mapp->ra_next), mapp = mapp->ra_next) {
+		    mapp = list_op(&dipmap->ra_rangeset, mapp)) {
 
 			DEBUGPRT(CE_CONT, "ndi_ra_alloc: ra_len = %" PRIx64
 			    ", len = %" PRIx64 "", mapp->ra_len, len);
 			base = mapp->ra_base;
 			if (base < lower) {
-				base = lower;
-				DEBUGPRT(CE_CONT, "\tbase=%" PRIx64
-				    ", ra_base=%" PRIx64 ", mask=%" PRIx64,
-				    base, mapp->ra_base, mask);
+				/* Didn't find anything */
+				break;
 			}
 
 			if ((base & mask) != 0) {
@@ -639,10 +657,10 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 					remlen = mapp->ra_len -
 					    (base - mapp->ra_base);
 
-				if ((backlargestp == NULL) ||
+				if ((backlargest == NULL) ||
 				    (largestlen < remlen)) {
 
-					backlargestp = backp;
+					backlargest = mapp;
 					largestbase = base;
 					largestlen = remlen;
 				}
@@ -660,7 +678,8 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 
 				DEBUGPRT(CE_CONT, "\thave a fit\n");
 
-				adjust_link(backp, mapp, base, len);
+				adjust_link(&dipmap->ra_rangeset, mapp, base,
+				    len);
 				rval = NDI_SUCCESS;
 				break;
 
@@ -671,7 +690,7 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 		base = req->ra_addr;
 		len = req->ra_len;
 		for (; mapp != NULL && mapp->ra_base <= upper;
-		    backp = &(mapp->ra_next), mapp = mapp->ra_next) {
+		    mapp = list_next(&dipmap->ra_rangeset, mapp)) {
 			if (base >= mapp->ra_base &&
 			    ((base - mapp->ra_base) < mapp->ra_len)) {
 				/*
@@ -693,13 +712,14 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 							    (base -
 							    mapp->ra_base);
 					}
-					backlargestp = backp;
+					backlargest = mapp;
 					largestbase = base;
 					largestlen = remlen;
 					base = 0;
 				} else {
 					/* We have a match */
-					adjust_link(backp, mapp, base, len);
+					adjust_link(&dipmap->ra_rangeset, mapp,
+					    base, len);
 					rval = NDI_SUCCESS;
 				}
 				break;
@@ -709,8 +729,8 @@ ndi_ra_alloc(dev_info_t *dip, ndi_ra_request_t *req, uint64_t *retbasep,
 
 	if ((rval != NDI_SUCCESS) &&
 	    (req->ra_flags & NDI_RA_ALLOC_PARTIAL_OK) &&
-	    (backlargestp != NULL)) {
-		adjust_link(backlargestp, *backlargestp, largestbase,
+	    (backlargest != NULL)) {
+		adjust_link(&dipmap->ra_rangeset, backlargest, largestbase,
 		    largestlen);
 
 		base = largestbase;
@@ -900,8 +920,8 @@ ra_dump_all(char *type, dev_info_t *dip)
 			}
 			cmn_err(CE_CONT, "  dip is %p\n",
 			    (void *)dipmap->ra_dip);
-			for (res = dipmap->ra_rangeset; res != NULL;
-			    res = res->ra_next) {
+			for (res = list_head(&dipmap->ra_rangeset); res != NULL;
+			    res = list_next(&dipmap->ra_rangeset, res)) {
 				cmn_err(CE_CONT, "\t  range is %" PRIx64
 				    " %" PRIx64 "\n", res->ra_base,
 				    res->ra_len);
@@ -1329,7 +1349,8 @@ pci_get_available_prop(dev_info_t *dip, uint64_t base, uint64_t len,
 	uint32_t	type;
 
 	/* check if we're manipulating MEM/IO resource */
-	if ((type = pci_type_ra2pci(busra_type)) == PCI_ADDR_TYPE_INVAL)
+	if ((type = pci_type_ra2pci(busra_type, base, len)) ==
+	    PCI_ADDR_TYPE_INVAL)
 		return (DDI_SUCCESS);
 
 	/* check if dip is a pci/pcie device resides in a pcie fabric */
@@ -1481,7 +1502,8 @@ pci_put_available_prop(dev_info_t *dip, uint64_t base, uint64_t len,
 	uint32_t	type;
 
 	/* check if we're manipulating MEM/IO resource */
-	if ((type = pci_type_ra2pci(busra_type)) == PCI_ADDR_TYPE_INVAL)
+	if ((type = pci_type_ra2pci(busra_type, base, len)) ==
+	    PCI_ADDR_TYPE_INVAL)
 		return (DDI_SUCCESS);
 
 	/* check if dip is a pci/pcie device resides in a pcie fabric */
@@ -1685,21 +1707,21 @@ failure:
 }
 
 static uint32_t
-pci_type_ra2pci(char *type)
+pci_type_ra2pci(char *type, uint64_t base, uint64_t size)
 {
 	uint32_t	pci_type = PCI_ADDR_TYPE_INVAL;
+	uint32_t	mem_type = PCI_ADDR_MEM32;
 
-	/*
-	 * No 64 bit mem support for now
-	 */
-	if (strcmp(type, NDI_RA_TYPE_IO) == 0) {
-		pci_type = PCI_ADDR_IO;
+	if (strcmp(type, NDI_RA_TYPE_IO) == 0)
+		return (PCI_ADDR_IO);
 
-	} else if (strcmp(type, NDI_RA_TYPE_MEM) == 0) {
-		pci_type = PCI_ADDR_MEM32;
+	if (base + size > UINT_MAX)
+		mem_type = PCI_ADDR_MEM64;
 
-	} else if (strcmp(type, NDI_RA_TYPE_PCI_PREFETCH_MEM)  == 0) {
-		pci_type = PCI_ADDR_MEM32;
+	if (strcmp(type, NDI_RA_TYPE_MEM) == 0) {
+		pci_type = mem_type;
+	} else if (strcmp(type, NDI_RA_TYPE_PCI_PREFETCH_MEM) == 0) {
+		pci_type = mem_type;
 		pci_type |= PCI_REG_PF_M;
 	}
 

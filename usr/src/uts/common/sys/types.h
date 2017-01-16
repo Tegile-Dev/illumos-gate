@@ -589,6 +589,14 @@ typedef	unsigned long	ulong;
 #define	ULLONG_MAX	18446744073709551615ULL
 					/* max of "unsigned long long int" */
 
+#if defined(_LP64) || _FILE_OFFSET_BITS == 32
+#define	OFF_MIN		LONG_MIN
+#define	OFF_MAX		LONG_MAX
+#elif _FILE_OFFSET_BITS == 64
+#define	OFF_MIN		LLONG_MIN
+#define	OFF_MAX		LLONG_MAX
+#endif	/* _LP64 || _FILE_OFFSET_BITS == 32 */
+
 #endif	/* defined(_KERNEL) */
 
 #define	P_MYPID	((pid_t)0)

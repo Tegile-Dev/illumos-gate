@@ -21,6 +21,7 @@
 /*
  * Copyright 2009 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2017, Tegile Systems, Inc. All rights reserved.
  */
 
 #ifndef _SYS_PCI_IMPL_H
@@ -106,8 +107,10 @@ struct pci_bus_resource {
 	uchar_t num_cbb;	/* # of CardBus Bridges on the bus */
 	boolean_t io_reprogram;	/* need io reprog on this bus */
 	boolean_t mem_reprogram;	/* need mem reprog on this bus */
+	boolean_t pmem_reprogram;	/* need pmem reprog on this bus */
 	boolean_t subtractive;	/* subtractive PPB */
-	uint_t mem_size;	/* existing children required MEM space size */
+	uint64_t pmem_size;	/* existing children required prefetch size */
+	uint64_t mem_size;	/* existing children required MEM space size */
 	uint_t io_size;		/* existing children required I/O space size */
 };
 
@@ -124,9 +127,10 @@ extern void memlist_free(struct memlist *);
 extern void memlist_free_all(struct memlist **);
 extern void memlist_insert(struct memlist **, uint64_t, uint64_t);
 extern int memlist_remove(struct memlist **, uint64_t, uint64_t);
-extern uint64_t memlist_find(struct memlist **, uint64_t, int);
+extern uint64_t memlist_find(struct memlist **, uint64_t, uint64_t);
+extern uint64_t memlist_find64(struct memlist **, uint64_t, uint64_t);
 extern uint64_t memlist_find_with_startaddr(struct memlist **, uint64_t,
-    uint64_t, int);
+    uint64_t, uint64_t);
 extern void memlist_dump(struct memlist *);
 extern void memlist_subsume(struct memlist **, struct memlist **);
 extern void memlist_merge(struct memlist **, struct memlist **);
