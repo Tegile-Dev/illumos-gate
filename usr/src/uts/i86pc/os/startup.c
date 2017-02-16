@@ -24,6 +24,7 @@
  * Copyright 2013 Nexenta Systems, Inc. All rights reserved.
  * Copyright 2015 Joyent, Inc.
  * Copyright (c) 2015 by Delphix. All rights reserved.
+ * Copyright (c) 2017, Tegile Systems, Inc. All rights reserved.
  */
 /*
  * Copyright (c) 2010, Intel Corporation.
@@ -608,7 +609,7 @@ static size_t	textrepl_min_gb = 10;
 
 vmem_t		*device_arena;
 uintptr_t	toxic_addr = (uintptr_t)NULL;
-size_t		toxic_size = 1024 * 1024 * 1024; /* Sparc uses 1 gig too */
+size_t		toxic_size = 256 * 1024 * 1024 * 1024ULL; /* 256 GB */
 
 #else	/* __i386 */
 

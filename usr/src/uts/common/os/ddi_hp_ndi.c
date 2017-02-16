@@ -380,13 +380,6 @@ ddihp_cn_req_handler(ddi_hp_cn_handle_t *hdlp,
 
 	ASSERT(DEVI_BUSY_OWNED(dip));
 
-	if (ddihp_cn_getstate(hdlp) != DDI_SUCCESS) {
-		DDI_HP_NEXDBG((CE_CONT, "ddihp_cn_req_handler: dip %p, "
-		    "hdlp %p ddi_cn_getstate failed\n", (void *)dip,
-		    (void *)hdlp));
-
-		return (NDI_UNCLAIMED);
-	}
 	if (hdlp->cn_info.cn_state != target_state) {
 		ddi_hp_cn_state_t result_state = 0;
 

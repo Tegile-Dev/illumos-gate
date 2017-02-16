@@ -21,6 +21,7 @@
 /*
  * Copyright 2010 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2017, Tegile Systems, Inc. All rights reserved.
  *
  * Copyright 2016 Joyent, Inc.
  *
@@ -239,7 +240,7 @@ bus_res_fini(void)
 }
 
 
-struct memlist **
+static struct memlist **
 rlistpp(UINT8 t, UINT8 flags, int bus)
 {
 	switch (t) {
@@ -343,12 +344,6 @@ acpi_wr_cb(ACPI_RESOURCE *rp, void *context)
 		break;
 
 	case ACPI_RESOURCE_TYPE_ADDRESS64:
-	/*
-	 * We comment out this block because we currently cannot deal with
-	 * PCI 64-bit addresses. Will revisit this when we add PCI 64-bit MMIO
-	 * support.
-	 */
-#if 0
 		if (rp->Data.Address64.AddressLength == 0)
 			break;
 		acpi_cb_cnt++;
@@ -356,11 +351,9 @@ acpi_wr_cb(ACPI_RESOURCE *rp, void *context)
 		    rp->Data.Address64.Info.TypeSpecific, bus),
 		    rp->Data.Address64.Minimum,
 		    rp->Data.Address64.AddressLength);
-#endif
 		break;
 
 	case ACPI_RESOURCE_TYPE_EXTENDED_ADDRESS64:
-#if 0	/* Will revisit this when we add PCI 64-bit MMIO support */
 		if (rp->Data.ExtAddress64.AddressLength == 0)
 			break;
 		acpi_cb_cnt++;
@@ -368,7 +361,6 @@ acpi_wr_cb(ACPI_RESOURCE *rp, void *context)
 		    rp->Data.ExtAddress64.Info.TypeSpecific, bus),
 		    rp->Data.ExtAddress64.Minimum,
 		    rp->Data.ExtAddress64.AddressLength);
-#endif
 		break;
 
 	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:
@@ -461,6 +453,7 @@ mps_find_bus_res(int bus, int type, struct memlist **res)
 {
 	struct sasm *sasmp;
 	uchar_t *extp;
+	uint64_t base, len;
 	int res_cnt;
 
 	if (mps_extp == NULL)
@@ -473,15 +466,11 @@ mps_find_bus_res(int bus, int type, struct memlist **res)
 			sasmp = (struct sasm *)extp;
 			if (((int)sasmp->sasm_as_type) == type &&
 			    ((int)sasmp->sasm_bus_id) == bus) {
-				if (sasmp->sasm_as_base_hi != 0 ||
-				    sasmp->sasm_as_len_hi != 0) {
-					printf("64 bits address space\n");
-					extp += SYS_AS_MAPPING_SIZE;
-					break;
-				}
-				memlist_insert(res,
-				    (uint64_t)sasmp->sasm_as_base,
-				    sasmp->sasm_as_len);
+				base = (uint64_t)sasmp->sasm_as_base_hi << 32 |
+				    sasmp->sasm_as_base;
+				len = (uint64_t)sasmp->sasm_as_len_hi << 32 |
+				    sasmp->sasm_as_len;
+				memlist_insert(res, base, len);
 				res_cnt++;
 			}
 			extp += SYS_AS_MAPPING_SIZE;
