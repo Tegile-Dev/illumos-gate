@@ -23,6 +23,7 @@
  * Copyright (c) 2011, Joyent, Inc. All rights reserved.
  * Copyright (c) 2011 Nexenta Systems, Inc. All rights reserved.
  * Copyright (c) 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 /* Copyright (c) 1990 Mentat Inc. */
 
@@ -151,6 +152,7 @@ typedef struct tcp_s {
 
 	struct conn_s	*tcp_connp;	/* back pointer to conn_t */
 	tcp_stack_t	*tcp_tcps;	/* back pointer to tcp_stack_t */
+	struct cc_st 	tcp_cc;		/* congestion control selection */
 
 	int32_t	tcp_state;
 	int32_t	tcp_rcv_ws;		/* My window scale power */

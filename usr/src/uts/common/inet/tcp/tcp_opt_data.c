@@ -21,6 +21,7 @@
 /*
  * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011 Nexenta Systems, Inc. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 
 #include <sys/types.h>
@@ -138,6 +139,9 @@ opdes_t	tcp_opt_arr[] = {
 { TCP_RTO_MAX, IPPROTO_TCP, OA_RW, OA_RW, OP_NP, 0, sizeof (uint32_t), 0 },
 
 { TCP_LINGER2, IPPROTO_TCP, OA_RW, OA_RW, OP_NP, 0, sizeof (int), 0 },
+
+{ TCP_CONGESTION, IPPROTO_TCP, OA_RW, OA_RW, OP_CONFIG,
+	OP_VARLEN, TCP_CC_ALGO_NAME_LENGTH, 0 },
 
 { IP_OPTIONS,	IPPROTO_IP, OA_RW, OA_RW, OP_NP,
 	(OP_VARLEN|OP_NODEFAULT),
@@ -446,6 +450,10 @@ tcp_opt_get(conn_t *connp, int level, int name, uchar_t *ptr)
 		case TCP_LINGER2:
 			*i1 = tcp->tcp_fin_wait_2_flush_interval / SECONDS;
 			return (sizeof (int));
+		case TCP_CONGESTION:
+			retval = strlcpy((char *)ptr, tcp->tcp_cc.cc_ptr->name,
+			    TCP_CC_ALGO_NAME_LENGTH);
+			return (retval + 1);
 		}
 		break;
 	case IPPROTO_IP:
@@ -971,6 +979,39 @@ tcp_opt_set(conn_t *connp, uint_t optset_context, int level, int name,
 			}
 			tcp->tcp_fin_wait_2_flush_interval = *i1 * SECONDS;
 			break;
+		case TCP_CONGESTION:
+			{
+			int i, len;
+			cc_cb_t *ccptr;
+
+			if (checkonly)
+				break;
+			*outlenp = 0;
+			if (inlen == 0 || ((len = strnlen((char *)invalp,
+			    inlen)) > TCP_CC_ALGO_NAME_LENGTH)) {
+				return (EINVAL);
+			}
+			if (tcp->tcp_state > TCPS_BOUND ||
+			    tcp->tcp_cc.cc_ptr == NULL) {
+				return (EOPNOTSUPP);
+			}
+			for (i = 0; i < TCP_CC_ALGO_NUM; i++) {
+				ccptr = &tcps->tcps_cc_list[i];
+				if (strlen(ccptr->name) == len &&
+				    memcmp(invalp, ccptr->name, len) == 0)
+					break;
+			}
+			if (i == TCP_CC_ALGO_NUM) {
+				return (EINVAL);
+			}
+
+			if (ccptr != tcp->tcp_cc.cc_ptr) {
+				tcp_cc_fini(&tcp->tcp_cc);
+				tcp->tcp_cc.cc_ptr = ccptr;
+				tcp_cc_init(&tcp->tcp_cc);
+			}
+			return (0);
+			}
 		default:
 			break;
 		}

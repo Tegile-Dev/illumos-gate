@@ -24,6 +24,7 @@
  * Copyright 2011 Nexenta Systems, Inc. All rights reserved.
  * Copyright 2016 Joyent, Inc.
  * Copyright (c) 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 
 /* This file contains all TCP input processing functions. */
@@ -169,6 +170,7 @@ static void	tcp_rsrv_input(void *, mblk_t *, void *, ip_recv_attr_t *);
 static void	tcp_set_rto(tcp_t *, time_t);
 static void	tcp_setcred_data(mblk_t *, ip_recv_attr_t *);
 
+extern uint32_t	tcp_cc_get_xmit_flags(cc_st_t *);
 /*
  * Set the MSS associated with a particular tcp based on its current value,
  * and a new one passed in. Observe minimums and maximums, and reset other
@@ -1448,6 +1450,9 @@ tcp_input_listener(void *arg, mblk_t *mp, void *arg2, ip_recv_attr_t *ira)
 	 */
 	tcp_init_values(eager, listener);
 
+	eager->tcp_cc.cc_ptr = listener->tcp_cc.cc_ptr;
+	tcp_cc_init(&eager->tcp_cc);
+
 	ASSERT((econnp->conn_ixa->ixa_flags &
 	    (IXAF_SET_ULP_CKSUM | IXAF_VERIFY_SOURCE |
 	    IXAF_VERIFY_PMTU | IXAF_VERIFY_LSO)) ==
@@ -2331,6 +2336,7 @@ tcp_input_data(void *arg, mblk_t *mp, void *arg2, ip_recv_attr_t *ira)
 	squeue_t	*sqp = (squeue_t *)arg2;
 	tcp_t		*tcp = connp->conn_tcp;
 	tcp_stack_t	*tcps = tcp->tcp_tcps;
+	cc_st_t		*tcp_cc = &tcp->tcp_cc;
 	sock_upcalls_t	*sockupcalls;
 
 	/*
@@ -2390,6 +2396,10 @@ tcp_input_data(void *arg, mblk_t *mp, void *arg2, ip_recv_attr_t *ira)
 		} while ((mp1 = mp1->b_cont) != NULL &&
 		    mp1->b_datap->db_type == M_DATA);
 	}
+
+	/* Reset cc_flags used for data processing */
+	TCP_CC_DATA_FLAGS_RESET(tcp);
+	tcp_cc->cc_seg_ack = seg_ack;
 
 	DTRACE_TCP5(receive, mblk_t *, NULL, ip_xmit_attr_t *, connp->conn_ixa,
 	    __dtrace_tcp_void_ip_t *, iphdr, tcp_t *, tcp,
@@ -2618,6 +2628,9 @@ tcp_input_data(void *arg, mblk_t *mp, void *arg2, ip_recv_attr_t *ira)
 			 * possible on the accepting host.
 			 */
 			flags |= TH_ACK_NEEDED;
+
+			/* CC algorithm specific call back */
+			tcp_cc_conn_init(tcp_cc);
 
 			/*
 			 * Trace connect-established here.
@@ -3841,6 +3854,9 @@ process_ack:
 		tcp->tcp_swl2 = seg_ack;
 		tcp->tcp_valid_bits &= ~TCP_ISS_VALID;
 
+		/* CC algorithm specific call back */
+		tcp_cc_conn_init(tcp_cc);
+
 		/* Trace change from SYN_RCVD -> ESTABLISHED here */
 		DTRACE_TCP6(state__change, void, NULL, ip_xmit_attr_t *,
 		    connp->conn_ixa, void, NULL, tcp_t *, tcp, void, NULL,
@@ -3862,16 +3878,16 @@ process_ack:
 	 */
 	if (tcp->tcp_cwr && SEQ_GT(seg_ack, tcp->tcp_cwr_snd_max))
 		tcp->tcp_cwr = B_FALSE;
+
 	if (tcp->tcp_ecn_ok && (flags & TH_ECE)) {
+		tcp_cc->cc_flags |= TCP_CC_FLG_ECE;
 		if (!tcp->tcp_cwr) {
-			npkt = ((tcp->tcp_snxt - tcp->tcp_suna) >> 1) / mss;
-			tcp->tcp_cwnd_ssthresh = MAX(npkt, 2) * mss;
-			tcp->tcp_cwnd = npkt * mss;
+			tcp_cc_cong_detected(tcp_cc);
 			/*
 			 * If the cwnd is 0, use the timer to clock out
 			 * new segments.  This is required by the ECN spec.
 			 */
-			if (npkt == 0) {
+			if (tcp->tcp_cwnd == 0) {
 				TCP_TIMER_RESTART(tcp, tcp->tcp_rto);
 				/*
 				 * This makes sure that when the ACK comes
@@ -3879,23 +3895,12 @@ process_ack:
 				 */
 				tcp->tcp_cwnd_cnt = 0;
 			}
-			tcp->tcp_cwr = B_TRUE;
-			/*
-			 * This marks the end of the current window of in
-			 * flight data.  That is why we don't use
-			 * tcp_suna + tcp_swnd.  Only data in flight can
-			 * provide ECN info.
-			 */
-			tcp->tcp_cwr_snd_max = tcp->tcp_snxt;
-			tcp->tcp_ecn_cwr_sent = B_FALSE;
 		}
 	}
 
 	mp1 = tcp->tcp_xmit_head;
 	if (bytes_acked == 0) {
 		if (!ofo_seg && seg_len == 0 && new_swnd == tcp->tcp_swnd) {
-			int dupack_cnt;
-
 			TCPS_BUMP_MIB(tcps, tcpInDupAck);
 			/*
 			 * Fast retransmit.  When we have seen exactly three
@@ -3907,147 +3912,12 @@ process_ack:
 			 */
 			if (mp1 && tcp->tcp_suna != tcp->tcp_snxt &&
 			    ! tcp->tcp_rexmit) {
-				/* Do Limited Transmit */
-				if ((dupack_cnt = ++tcp->tcp_dupack_cnt) <
+				tcp->tcp_dupack_cnt++;
+				tcp_cc->cc_flags |= TCP_CC_FLG_DUPACK;
+				tcp_cc_ack_received(tcp_cc);
+				if (tcp->tcp_dupack_cnt ==
 				    tcps->tcps_dupack_fast_retransmit) {
-					/*
-					 * RFC 3042
-					 *
-					 * What we need to do is temporarily
-					 * increase tcp_cwnd so that new
-					 * data can be sent if it is allowed
-					 * by the receive window (tcp_rwnd).
-					 * tcp_wput_data() will take care of
-					 * the rest.
-					 *
-					 * If the connection is SACK capable,
-					 * only do limited xmit when there
-					 * is SACK info.
-					 *
-					 * Note how tcp_cwnd is incremented.
-					 * The first dup ACK will increase
-					 * it by 1 MSS.  The second dup ACK
-					 * will increase it by 2 MSS.  This
-					 * means that only 1 new segment will
-					 * be sent for each dup ACK.
-					 */
-					if (tcp->tcp_unsent > 0 &&
-					    (!tcp->tcp_snd_sack_ok ||
-					    (tcp->tcp_snd_sack_ok &&
-					    tcp->tcp_notsack_list != NULL))) {
-						tcp->tcp_cwnd += mss <<
-						    (tcp->tcp_dupack_cnt - 1);
-						flags |= TH_LIMIT_XMIT;
-					}
-				} else if (dupack_cnt ==
-				    tcps->tcps_dupack_fast_retransmit) {
-
-				/*
-				 * If we have reduced tcp_ssthresh
-				 * because of ECN, do not reduce it again
-				 * unless it is already one window of data
-				 * away.  After one window of data, tcp_cwr
-				 * should then be cleared.  Note that
-				 * for non ECN capable connection, tcp_cwr
-				 * should always be false.
-				 *
-				 * Adjust cwnd since the duplicate
-				 * ack indicates that a packet was
-				 * dropped (due to congestion.)
-				 */
-				if (!tcp->tcp_cwr) {
-					npkt = ((tcp->tcp_snxt -
-					    tcp->tcp_suna) >> 1) / mss;
-					tcp->tcp_cwnd_ssthresh = MAX(npkt, 2) *
-					    mss;
-					tcp->tcp_cwnd = (npkt +
-					    tcp->tcp_dupack_cnt) * mss;
-				}
-				if (tcp->tcp_ecn_ok) {
-					tcp->tcp_cwr = B_TRUE;
-					tcp->tcp_cwr_snd_max = tcp->tcp_snxt;
-					tcp->tcp_ecn_cwr_sent = B_FALSE;
-				}
-
-				/*
-				 * We do Hoe's algorithm.  Refer to her
-				 * paper "Improving the Start-up Behavior
-				 * of a Congestion Control Scheme for TCP,"
-				 * appeared in SIGCOMM'96.
-				 *
-				 * Save highest seq no we have sent so far.
-				 * Be careful about the invisible FIN byte.
-				 */
-				if ((tcp->tcp_valid_bits & TCP_FSS_VALID) &&
-				    (tcp->tcp_unsent == 0)) {
-					tcp->tcp_rexmit_max = tcp->tcp_fss;
-				} else {
-					tcp->tcp_rexmit_max = tcp->tcp_snxt;
-				}
-
-				/*
-				 * For SACK:
-				 * Calculate tcp_pipe, which is the
-				 * estimated number of bytes in
-				 * network.
-				 *
-				 * tcp_fack is the highest sack'ed seq num
-				 * TCP has received.
-				 *
-				 * tcp_pipe is explained in the above quoted
-				 * Fall and Floyd's paper.  tcp_fack is
-				 * explained in Mathis and Mahdavi's
-				 * "Forward Acknowledgment: Refining TCP
-				 * Congestion Control" in SIGCOMM '96.
-				 */
-				if (tcp->tcp_snd_sack_ok) {
-					if (tcp->tcp_notsack_list != NULL) {
-						tcp->tcp_pipe = tcp->tcp_snxt -
-						    tcp->tcp_fack;
-						tcp->tcp_sack_snxt = seg_ack;
-						flags |= TH_NEED_SACK_REXMIT;
-					} else {
-						/*
-						 * Always initialize tcp_pipe
-						 * even though we don't have
-						 * any SACK info.  If later
-						 * we get SACK info and
-						 * tcp_pipe is not initialized,
-						 * funny things will happen.
-						 */
-						tcp->tcp_pipe =
-						    tcp->tcp_cwnd_ssthresh;
-					}
-				} else {
-					flags |= TH_REXMIT_NEEDED;
-				} /* tcp_snd_sack_ok */
-
-				} else {
-					/*
-					 * Here we perform congestion
-					 * avoidance, but NOT slow start.
-					 * This is known as the Fast
-					 * Recovery Algorithm.
-					 */
-					if (tcp->tcp_snd_sack_ok &&
-					    tcp->tcp_notsack_list != NULL) {
-						flags |= TH_NEED_SACK_REXMIT;
-						tcp->tcp_pipe -= mss;
-						if (tcp->tcp_pipe < 0)
-							tcp->tcp_pipe = 0;
-					} else {
-					/*
-					 * We know that one more packet has
-					 * left the pipe thus we can update
-					 * cwnd.
-					 */
-					cwnd = tcp->tcp_cwnd + mss;
-					if (cwnd > tcp->tcp_cwnd_max)
-						cwnd = tcp->tcp_cwnd_max;
-					tcp->tcp_cwnd = cwnd;
-					if (tcp->tcp_unsent > 0)
-						flags |= TH_XMIT_NEEDED;
-					}
+					tcp_cc_cong_detected(tcp_cc);
 				}
 			}
 		} else if (tcp->tcp_zero_win_probe) {
@@ -4166,59 +4036,15 @@ process_ack:
 		    &(tcp->tcp_num_notsack_blk), &(tcp->tcp_cnt_notsack_list));
 	}
 
-	/*
-	 * If we got an ACK after fast retransmit, check to see
-	 * if it is a partial ACK.  If it is not and the congestion
-	 * window was inflated to account for the other side's
-	 * cached packets, retract it.  If it is, do Hoe's algorithm.
-	 */
+	/* If it is an ack with (bytes_acked > 0) after a retransmit */
 	if (tcp->tcp_dupack_cnt >= tcps->tcps_dupack_fast_retransmit) {
-		ASSERT(tcp->tcp_rexmit == B_FALSE);
-		if (SEQ_GEQ(seg_ack, tcp->tcp_rexmit_max)) {
-			tcp->tcp_dupack_cnt = 0;
-			/*
-			 * Restore the orig tcp_cwnd_ssthresh after
-			 * fast retransmit phase.
-			 */
-			if (tcp->tcp_cwnd > tcp->tcp_cwnd_ssthresh) {
-				tcp->tcp_cwnd = tcp->tcp_cwnd_ssthresh;
-			}
-			tcp->tcp_rexmit_max = seg_ack;
-			tcp->tcp_cwnd_cnt = 0;
-
-			/*
-			 * Remove all notsack info to avoid confusion with
-			 * the next fast retrasnmit/recovery phase.
-			 */
-			if (tcp->tcp_snd_sack_ok) {
-				TCP_NOTSACK_REMOVE_ALL(tcp->tcp_notsack_list,
-				    tcp);
-			}
-		} else {
-			if (tcp->tcp_snd_sack_ok &&
-			    tcp->tcp_notsack_list != NULL) {
-				flags |= TH_NEED_SACK_REXMIT;
-				tcp->tcp_pipe -= mss;
-				if (tcp->tcp_pipe < 0)
-					tcp->tcp_pipe = 0;
-			} else {
-				/*
-				 * Hoe's algorithm:
-				 *
-				 * Retransmit the unack'ed segment and
-				 * restart fast recovery.  Note that we
-				 * need to scale back tcp_cwnd to the
-				 * original value when we started fast
-				 * recovery.  This is to prevent overly
-				 * aggressive behaviour in sending new
-				 * segments.
-				 */
-				tcp->tcp_cwnd = tcp->tcp_cwnd_ssthresh +
-				    tcps->tcps_dupack_fast_retransmit * mss;
-				tcp->tcp_cwnd_cnt = tcp->tcp_cwnd;
-				flags |= TH_REXMIT_NEEDED;
-			}
-		}
+		/*
+		 * Any progress made will invoke cong_recovered call back.
+		 * The call back funtion need to decide whether actually
+		 * the congestion was recovered or not. For example a
+		 * partial ack need not reset the recovery status.
+		 */
+		tcp_cc_cong_recovered(tcp_cc);
 	} else {
 		tcp->tcp_dupack_cnt = 0;
 		if (tcp->tcp_rexmit) {
@@ -4267,44 +4093,16 @@ process_ack:
 		goto fin_acked;
 	}
 
-	/*
-	 * Update the congestion window.
-	 *
-	 * If TCP is not ECN capable or TCP is ECN capable but the
-	 * congestion experience bit is not set, increase the tcp_cwnd as
-	 * usual.
-	 */
-	if (!tcp->tcp_ecn_ok || !(flags & TH_ECE)) {
-		cwnd = tcp->tcp_cwnd;
-		add = mss;
-
-		if (cwnd >= tcp->tcp_cwnd_ssthresh) {
-			/*
-			 * This is to prevent an increase of less than 1 MSS of
-			 * tcp_cwnd.  With partial increase, tcp_wput_data()
-			 * may send out tinygrams in order to preserve mblk
-			 * boundaries.
-			 *
-			 * By initializing tcp_cwnd_cnt to new tcp_cwnd and
-			 * decrementing it by 1 MSS for every ACKs, tcp_cwnd is
-			 * increased by 1 MSS for every RTTs.
-			 */
-			if (tcp->tcp_cwnd_cnt <= 0) {
-				tcp->tcp_cwnd_cnt = cwnd + add;
-			} else {
-				tcp->tcp_cwnd_cnt -= add;
-				add = 0;
-			}
-		}
-		tcp->tcp_cwnd = MIN(cwnd + add, tcp->tcp_cwnd_max);
-	}
-
 	/* See if the latest urgent data has been acknowledged */
 	if ((tcp->tcp_valid_bits & TCP_URG_VALID) &&
 	    SEQ_GT(seg_ack, tcp->tcp_urg))
 		tcp->tcp_valid_bits &= ~TCP_URG_VALID;
 
-	/* Can we update the RTT estimates? */
+	/*
+	 * If needed, update the RTT estimates. Please note, some of the
+	 * congestion algorithms (eg:- cubic), depends upon RTT estimates, So
+	 * better to do it before invoking corresponding call back functions.
+	 */
 	if (tcp->tcp_snd_ts_ok) {
 		/* Ignore zero timestamp echo-reply. */
 		if (tcpopt.tcp_opt_ts_ecr != 0) {
@@ -4344,6 +4142,8 @@ process_ack:
 	} else {
 		TCPS_BUMP_MIB(tcps, tcpRttNoUpdate);
 	}
+
+	tcp_cc_ack_received(tcp_cc);
 
 	/* Eat acknowledged bytes off the xmit queue. */
 	for (;;) {
@@ -4817,6 +4617,10 @@ update_ack:
 xmit_check:
 	/* Is there anything left to do? */
 	ASSERT(!(flags & TH_MARKNEXT_NEEDED));
+
+	if (TCP_CC_XMIT_FLAGS_CHECK(tcp))
+		flags |= tcp_cc_get_xmit_flags(tcp_cc);
+
 	if ((flags & (TH_REXMIT_NEEDED|TH_XMIT_NEEDED|TH_ACK_NEEDED|
 	    TH_NEED_SACK_REXMIT|TH_LIMIT_XMIT|TH_ACK_TIMER_NEEDED|
 	    TH_ORDREL_NEEDED|TH_SEND_URP_MARK)) == 0)

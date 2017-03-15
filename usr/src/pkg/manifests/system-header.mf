@@ -26,6 +26,7 @@
 # Copyright 2014 Garrett D'Amore <garrett@damore.org>
 # Copyright 2016 Nexenta Systems, Inc.
 # Copyright 2016 Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
+# Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
 #
 
 set name=pkg.fmri value=pkg:/system/header@$(PKGVERS)
@@ -430,6 +431,7 @@ file path=usr/include/inet/optcom.h
 file path=usr/include/inet/sctp_itf.h
 file path=usr/include/inet/snmpcom.h
 file path=usr/include/inet/tcp.h
+file path=usr/include/inet/tcp_cc.h
 file path=usr/include/inet/tcp_sack.h
 file path=usr/include/inet/tcp_stack.h
 file path=usr/include/inet/tcp_stats.h

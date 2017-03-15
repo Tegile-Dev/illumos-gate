@@ -22,6 +22,7 @@
 /*
  * Copyright (c) 1991, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011 Nexenta Systems, Inc. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 
 /*
@@ -122,6 +123,7 @@ struct tcphdr {
 #define	TCP_RTO_MIN			0x1A
 #define	TCP_RTO_MAX			0x1B
 #define	TCP_LINGER2			0x1C
+#define	TCP_CONGESTION			0x1D
 
 /* gap for expansion of ``standard'' options */
 #define	TCP_ANONPRIVBIND		0x20	/* for internal use only  */

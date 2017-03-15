@@ -22,6 +22,7 @@
 /*
  * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 
 /* This file contains all TCP output processing functions. */
@@ -370,9 +371,13 @@ data_null:
 		tcp_hdr_len = connp->conn_ht_ulp_len;
 	}
 
+	/*
+	 * Check to see if this connection has been idled for some time and
+	 * no ACK is expected. If so, call post idle call back function.
+	 */
 	if ((tcp->tcp_suna == snxt) && !tcp->tcp_localnet &&
 	    (TICK_TO_MSEC(now - tcp->tcp_last_recv_time) >= tcp->tcp_rto)) {
-		TCP_SET_INIT_CWND(tcp, mss, tcps->tcps_slow_start_after_idle);
+		tcp_cc_post_idle(&tcp->tcp_cc);
 	}
 	if (tcpstate == TCPS_SYN_RCVD) {
 		/*
@@ -1180,17 +1185,13 @@ tcp_output(void *arg, mblk_t *mp, void *arg2, ip_recv_attr_t *dummy)
 	snxt = tcp->tcp_snxt;
 
 	/*
-	 * Check to see if this connection has been idled for some
-	 * time and no ACK is expected.  If it is, we need to slow
-	 * start again to get back the connection's "self-clock" as
-	 * described in VJ's paper.
-	 *
-	 * Reinitialize tcp_cwnd after idle.
+	 * Check to see if this connection has been idled for some time and
+	 * no ACK is expected. If so, call post idle call back function.
 	 */
 	now = LBOLT_FASTPATH;
 	if ((tcp->tcp_suna == snxt) && !tcp->tcp_localnet &&
 	    (TICK_TO_MSEC(now - tcp->tcp_last_recv_time) >= tcp->tcp_rto)) {
-		TCP_SET_INIT_CWND(tcp, mss, tcps->tcps_slow_start_after_idle);
+		tcp_cc_post_idle(&tcp->tcp_cc);
 	}
 
 	usable = tcp->tcp_swnd;		/* tcp window size */
@@ -3338,24 +3339,25 @@ tcp_sack_rexmit(tcp_t *tcp, uint_t *flags)
 				break;
 			}
 		}
-		/*
-		 * All holes are filled.  Manipulate tcp_cwnd to send more
-		 * if we can.  Note that after the SACK recovery, tcp_cwnd is
-		 * set to tcp_cwnd_ssthresh.
-		 */
+
+		/* All holes are filled. */
 		if (notsack_blk == NULL) {
-			usable_swnd = tcp->tcp_cwnd_ssthresh - tcp->tcp_pipe;
-			if (usable_swnd <= 0 || tcp->tcp_unsent == 0) {
-				tcp->tcp_cwnd = tcp->tcp_snxt - tcp->tcp_suna;
-				ASSERT(tcp->tcp_cwnd > 0);
-				return;
-			} else {
-				usable_swnd = usable_swnd / mss;
-				tcp->tcp_cwnd = tcp->tcp_snxt - tcp->tcp_suna +
-				    MAX(usable_swnd * mss, mss);
+			/*
+			 * If appropriate, manipulate tcp_cwnd to send more and
+			 * set flag to xmit segs from queue
+			 *
+			 * Please note that this cwnd manipulation is common to
+			 * all congestion control algorithms. if it is against
+			 * any newly supported algorithms, this manipulation
+			 * may need to implement differently.
+			 */
+			if (tcp->tcp_unsent > 0 &&
+			    tcp->tcp_cwnd_ssthresh > tcp->tcp_pipe) {
 				*flags |= TH_XMIT_NEEDED;
-				return;
+				tcp->tcp_cwnd += MAX(
+				    (usable_swnd / mss) * mss, mss);
 			}
+			return;
 		}
 
 		/*

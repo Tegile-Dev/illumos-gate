@@ -21,6 +21,7 @@
 
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 
 #ifndef	_INET_TCP_STACK_H
@@ -30,6 +31,7 @@
 #include <inet/ip.h>
 #include <inet/ipdrop.h>
 #include <inet/tcp_stats.h>
+#include <inet/tcp_cc.h>
 #include <sys/sunddi.h>
 #include <sys/sunldi.h>
 
@@ -123,6 +125,9 @@ struct tcp_stack {
 	 */
 	tcp_stats_cpu_t	**tcps_sc;
 	int		tcps_sc_cnt;
+
+	/* tcp congestion contorol algorithms */
+	cc_cb_t		tcps_cc_list[TCP_CC_ALGO_NUM];
 };
 
 typedef struct tcp_stack tcp_stack_t;

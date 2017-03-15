@@ -23,6 +23,7 @@
  * Copyright 2016 Joyent, Inc.
  * Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
  * Copyright (c) 2013 by Delphix. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 /* Copyright (c) 1990 Mentat Inc. */
 
@@ -526,6 +527,9 @@ mod_prop_info_t tcp_propinfo_tbl[] = {
 	    mod_set_uint32, mod_get_uint32,
 	    {1, ISS_INCR, ISS_INCR},
 	    {ISS_INCR} },
+
+	{ "cong_default", MOD_PROTO_TCP,
+	    mod_set_uint32, mod_get_uint32, {0, 1, 0}, {0} },
 
 	{ "?", MOD_PROTO_TCP, NULL, mod_get_allprop, {0}, {0} },
 

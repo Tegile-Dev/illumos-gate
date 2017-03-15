@@ -26,6 +26,7 @@
 # Copyright 2016 Toomas Soome <tsoome@me.com>
 # Copyright 2016 Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
 # Copyright 2016 Nexenta Systems, Inc.
+# Copyright 2016 Tegile Systems Inc.
 #
 
 #
@@ -151,6 +152,7 @@ usr/include/inet/ip_ndp.h
 usr/include/inet/ip2mac_impl.h
 usr/include/inet/ip2mac.h
 usr/include/inet/rawip_impl.h
+usr/include/inet/tcp_cc_cubic.h
 usr/include/inet/tcp_impl.h
 usr/include/inet/udp_impl.h
 usr/include/libmail.h

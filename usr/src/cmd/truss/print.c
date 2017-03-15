@@ -22,6 +22,7 @@
 /*
  * Copyright (c) 1989, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2015, Joyent, Inc. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 
 /*	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T	*/
@@ -2039,6 +2040,7 @@ tcp_optname(private_t *pri, long val)
 	case TCP_KEEPIDLE:		return ("TCP_KEEPIDLE");
 	case TCP_KEEPCNT:		return ("TCP_KEEPCNT");
 	case TCP_KEEPINTVL:		return ("TCP_KEEPINTVL");
+	case TCP_CONGESTION:		return ("TCP_CONGESTION");
 
 	default:			(void) snprintf(pri->code_buf,
 					    sizeof (pri->code_buf),

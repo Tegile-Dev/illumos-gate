@@ -21,6 +21,7 @@
 /*
  * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2013 by Delphix. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 
 /*
@@ -48,6 +49,7 @@
 #include <zone.h>
 #include "libipadm_impl.h"
 #include <inet/tunables.h>
+#include <inet/tcp_cc.h>
 
 #define	IPADM_NONESTR		"none"
 #define	DEF_METRIC_VAL		0	/* default metric value */
@@ -67,7 +69,8 @@ static ipadm_status_t	i_ipadm_validate_if(ipadm_handle_t, const char *,
 static ipadm_pd_getf_t	i_ipadm_get_prop, i_ipadm_get_ifprop_flags,
 			i_ipadm_get_mtu, i_ipadm_get_metric,
 			i_ipadm_get_usesrc, i_ipadm_get_forwarding,
-			i_ipadm_get_ecnsack, i_ipadm_get_hostmodel;
+			i_ipadm_get_ecnsack, i_ipadm_get_hostmodel,
+			i_ipadm_get_cong;
 
 /*
  * Callback function to set property values. These functions translate the
@@ -78,7 +81,8 @@ static ipadm_pd_setf_t	i_ipadm_set_prop, i_ipadm_set_mtu,
 			i_ipadm_set_ifprop_flags,
 			i_ipadm_set_metric, i_ipadm_set_usesrc,
 			i_ipadm_set_forwarding, i_ipadm_set_eprivport,
-			i_ipadm_set_ecnsack, i_ipadm_set_hostmodel;
+			i_ipadm_set_ecnsack, i_ipadm_set_hostmodel,
+			i_ipadm_set_cong;
 
 /* array of protocols we support */
 static int protocols[] = { MOD_PROTO_IP, MOD_PROTO_RAWIP,
@@ -151,6 +155,9 @@ static ipadm_prop_desc_t ipadm_ip_prop_table[] = {
 /* possible values for TCP properties `ecn' and `sack' */
 static const char *ecn_sack_vals[] = {"never", "passive", "active", NULL};
 
+/* Supported TCP Congestion Control Algorithms */
+static const char *tcp_cc_algo_names[] = TCP_CC_ALGO_LIST;
+
 /* Supported TCP protocol properties */
 static ipadm_prop_desc_t ipadm_tcp_prop_table[] = {
 	{ "ecn", NULL, IPADMPROP_CLASS_MODULE, MOD_PROTO_TCP, 0,
@@ -180,6 +187,9 @@ static ipadm_prop_desc_t ipadm_tcp_prop_table[] = {
 
 	{ "smallest_nonpriv_port", NULL, IPADMPROP_CLASS_MODULE, MOD_PROTO_TCP,
 	    0, i_ipadm_set_prop, i_ipadm_get_prop, i_ipadm_get_prop },
+
+	{ "cong_default", NULL, IPADMPROP_CLASS_MODULE, MOD_PROTO_TCP, 0,
+	    i_ipadm_set_cong, i_ipadm_get_cong, i_ipadm_get_cong },
 
 	{ NULL, NULL, 0, 0, 0, NULL, NULL, NULL }
 };
@@ -810,6 +820,79 @@ i_ipadm_get_ecnsack(ipadm_handle_t iph, const void *arg,
 	}
 
 	return (status);
+}
+
+/* ARGSUSED */
+static ipadm_status_t
+i_ipadm_get_cong(ipadm_handle_t iph, const void *arg, ipadm_prop_desc_t *pdp,
+    char *buf, uint_t *bufsize, uint_t proto, uint_t valtype)
+{
+	const char	*cp = "?";
+	size_t		nbytes;
+	ipadm_status_t	status;
+	int		cong;
+
+	switch (valtype) {
+	case MOD_PROP_PERM:
+		nbytes = snprintf(buf, *bufsize, "%d", MOD_PROP_PERM_RW);
+		break;
+	case MOD_PROP_DEFAULT:
+		nbytes = snprintf(buf, *bufsize, TCP_CC_ALGO_DEFAULT);
+		break;
+	case MOD_PROP_ACTIVE:
+		if ((status = i_ipadm_get_prop(iph, arg, pdp, buf, bufsize,
+		    proto, valtype)) != IPADM_SUCCESS) {
+			return (status);
+		}
+		cong  = atoi(buf);
+		if (cong >= 0 && cong < TCP_CC_ALGO_NUM) {
+			cp = tcp_cc_algo_names[cong];
+		}
+		nbytes = snprintf(buf, *bufsize, "%s", cp);
+		break;
+	case MOD_PROP_POSSIBLE:
+		nbytes = strlcpy(buf, tcp_cc_algo_names[0], *bufsize);
+		for (cong = 1; cong < TCP_CC_ALGO_NUM; cong++) {
+			nbytes += strlen(tcp_cc_algo_names[cong]) + 1;
+			if (nbytes < *bufsize) {
+				(void) strlcat(buf, ",", *bufsize);
+				(void) strlcat(buf, tcp_cc_algo_names[cong],
+				    *bufsize);
+			}
+		}
+		break;
+	default:
+		return (IPADM_INVALID_ARG);
+	}
+
+	if (nbytes >= *bufsize) {
+		/* insufficient buffer space */
+		*bufsize = nbytes + 1;
+		return (IPADM_NO_BUFS);
+	}
+	return (IPADM_SUCCESS);
+}
+
+/* ARGSUSED */
+static ipadm_status_t
+i_ipadm_set_cong(ipadm_handle_t iph, const void *arg,
+    ipadm_prop_desc_t *pdp, const void *pval, uint_t proto, uint_t flags)
+{
+	int		i;
+	char		val[MAXPROPVALLEN];
+
+	if (!(flags & IPADM_OPT_DEFAULT)) {
+		for (i = 0; i < TCP_CC_ALGO_NUM; i++) {
+			if (strcmp(pval, tcp_cc_algo_names[i]) == 0)
+				break;
+		}
+		if (i == TCP_CC_ALGO_NUM)
+			return (IPADM_INVALID_ARG);
+		(void) snprintf(val, MAXPROPVALLEN, "%d", i);
+		pval = val;
+	}
+
+	return (i_ipadm_set_prop(iph, arg, pdp, pval, proto, flags));
 }
 
 /* ARGSUSED */

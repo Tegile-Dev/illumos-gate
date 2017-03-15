@@ -25,6 +25,7 @@
  * Copyright (c) 2011 Nexenta Systems, Inc. All rights reserved.
  * Copyright (c) 2013,2014 by Delphix. All rights reserved.
  * Copyright 2014, OmniTI Computer Consulting, Inc. All rights reserved.
+ * Copyright (c) 2016, Tegile Systems Inc. All rights reserved.
  */
 /* Copyright (c) 1990 Mentat Inc. */
 
@@ -301,6 +302,8 @@ static int	tcp_openv4(queue_t *, dev_t *, int, int, cred_t *);
 static int	tcp_openv6(queue_t *, dev_t *, int, int, cred_t *);
 
 static void	tcp_squeue_add(squeue_t *);
+
+extern void 	tcp_cc_stack_init(tcp_stack_t *);
 
 struct module_info tcp_rinfo =  {
 	TCP_MOD_ID, TCP_MOD_NAME, 0, INFPSZ, TCP_RECV_HIWATER, TCP_RECV_LOWATER
@@ -1359,6 +1362,10 @@ tcp_free(tcp_t *tcp)
 	ASSERT(tcp != NULL);
 	ASSERT(tcp->tcp_ptpahn == NULL && tcp->tcp_acceptor_hash == NULL);
 
+	if (tcp->tcp_cc.cc_ptr)
+		tcp_cc_fini(&tcp->tcp_cc);
+	bzero(&tcp->tcp_cc, sizeof (cc_st_t));
+
 	connp->conn_rq = NULL;
 	connp->conn_wq = NULL;
 
@@ -1500,6 +1507,8 @@ tcp_get_conn(void *arg, tcp_stack_t *tcps)
 		connp->conn_netstack = ns;
 		connp->conn_ixa->ixa_ipst = ns->netstack_ip;
 		tcp->tcp_tcps = tcps;
+		tcp->tcp_cc.cc_tcp = tcp;
+		tcp->tcp_cc.cc_ptr = tcp_cc_default(tcps);
 		ipcl_globalhash_insert(connp);
 
 		connp->conn_ixa->ixa_notify_cookie = tcp;
@@ -1529,6 +1538,8 @@ tcp_get_conn(void *arg, tcp_stack_t *tcps)
 	mutex_init(&tcp->tcp_rsrv_mp_lock, NULL, MUTEX_DEFAULT, NULL);
 
 	tcp->tcp_tcps = tcps;
+	tcp->tcp_cc.cc_tcp = tcp;
+	tcp->tcp_cc.cc_ptr = tcp_cc_default(tcps);
 
 	connp->conn_recv = tcp_input_data;
 	connp->conn_recvicmp = tcp_icmp_input;
@@ -2448,6 +2459,8 @@ tcp_init_values(tcp_t *tcp, tcp_t *parent)
 	 */
 	if (!connp->conn_debug)
 		connp->conn_debug = tcps->tcps_dbg;
+
+	TCP_CC_FLAGS_RESET(tcp);
 }
 
 /*
@@ -2734,6 +2747,7 @@ tcp_create_common(cred_t *credp, boolean_t isv6, boolean_t issocket,
 	/* DTrace ignores this - it isn't a tcp:::state-change */
 	tcp->tcp_state = TCPS_IDLE;
 	tcp_init_values(tcp, NULL);
+	tcp_cc_init(&tcp->tcp_cc);
 	return (connp);
 }
 
@@ -3807,6 +3821,7 @@ tcp_stack_init(netstackid_t stackid, netstack_t *ns)
 	tcps->tcps_reclaim = B_FALSE;
 	tcps->tcps_reclaim_tid = 0;
 	tcps->tcps_reclaim_period = tcps->tcps_rexmit_interval_max;
+	tcp_cc_stack_init(tcps);
 
 	/*
 	 * ncpus is the current number of CPUs, which can be bigger than
